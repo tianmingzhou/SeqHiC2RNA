@@ -5,12 +5,16 @@ import numpy as np
 
 from utils.utils import seed_all
 from utils.dataset import load_data
-from enformer_pytorch import Enformer
+from algo.enformer import Enformer
 from tqdm import tqdm
 
 def train():
-    train_loader, valid_loader, test_loader =\
-        load_data(args.data_path, args.seed, args.batch_size, args.num_workers)
+    train_loader, valid_loader, test_loader = load_data(
+        path = args.data_path, 
+        seed = args.seed, 
+        batch_size = args.batch_size, 
+        num_workers = args.num_workers, 
+        target_len = args.target_length)
 
     model = Enformer.from_hparams(
         dim = args.dim,
@@ -29,9 +33,9 @@ def train():
         model.train()
         with tqdm(total=len(train_loader), dynamic_ncols=True) as t:
             t.set_description(f'Epoch: {epoch}/{args.epochs}')
-            for seq, exp in train_loader:
-                seq, exp = seq.to(device), exp.to(device)
-                loss = model(seq, head='human', target=exp)
+            for seq, exp, index in train_loader:
+                seq, exp, index = seq.to(device), exp.to(device), index.to(device)
+                loss = model(seq, head='human', target=exp, index=index)
 
                 train_loss.append(loss.item())
 
@@ -53,7 +57,7 @@ if __name__=='__main__':
 
     parser.add_argument('--data_path', default='./data', help='Path of the dataset')
     parser.add_argument('--seed', default=0, type=int)
-    parser.add_argument('--batch_size', default=1, type=int)
+    parser.add_argument('--batch_size', default=2, type=int)
     parser.add_argument('--num_workers', default=8, type=int)
     parser.add_argument('--lr', default=1e-4, type=float, help='Learning Rate')
     parser.add_argument('--wd', default=0.0, help='L2 Regularization for Optimizer')
@@ -64,8 +68,8 @@ if __name__=='__main__':
     parser.add_argument('--dim', default=1536, type=int)
     parser.add_argument('--depth', default=11, type=int, help='Number of transformer blocks')
     parser.add_argument('--heads', default=8, type=int, help='Attention Heads')
-    parser.add_argument('--output_heads', default=5313, type=int)
-    parser.add_argument('--target_length', default=400, type=int)
+    parser.add_argument('--output_heads', default=3740, type=int)
+    parser.add_argument('--target_length', default=1920, type=int)
 
     args = parser.parse_args()
     print(args)
