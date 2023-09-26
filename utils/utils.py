@@ -1,5 +1,6 @@
 import random
 import torch
+import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 
@@ -27,4 +28,9 @@ def read_DNAseq_tsv(path):
 def read_Expre_tsv(path):
     total_expressions = pd.read_csv(path, sep='\t', header=None)
     return total_expressions.values
+
+def pearson_corr_coef(x, y, dim = 1, reduce_dims = (-1,)):
+    x_centered = x - x.mean(dim = dim, keepdim = True)
+    y_centered = y - y.mean(dim = dim, keepdim = True)
+    return F.cosine_similarity(x_centered, y_centered, dim = dim).mean(dim = reduce_dims)
     

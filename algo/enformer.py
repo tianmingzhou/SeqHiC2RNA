@@ -46,10 +46,10 @@ def poisson_loss(pred, target, index):
     pred = pred[index0, :, index]
     return (pred - target * log(pred)).mean()
 
-def pearson_corr_coef(x, y, dim = 1, reduce_dims = (-1,)):
-    x_centered = x - x.mean(dim = dim, keepdim = True)
-    y_centered = y - y.mean(dim = dim, keepdim = True)
-    return F.cosine_similarity(x_centered, y_centered, dim = dim).mean(dim = reduce_dims)
+def fetch_pred(x, index):
+    index0 = torch.arange(x.shape[0])
+    x = x[index0, :, index]
+    return x
 
 # relative positional encoding functions
 
@@ -402,7 +402,7 @@ class Enformer(PreTrainedModel):
         x,
         target = None,
         index = None,
-        return_corr_coef = False,
+        return_fetch_pred = None,
         return_embeddings = False,
         return_only_embeddings = False,
         head = None,
@@ -440,12 +440,12 @@ class Enformer(PreTrainedModel):
         if exists(target):
             assert exists(head), 'head must be passed in if one were to calculate loss directly with targets'
 
-            if return_corr_coef:
-                return pearson_corr_coef(out, target)
-
             return poisson_loss(out, target, index)
 
         if return_embeddings:
             return out, x
+
+        if return_fetch_pred:
+            return fetch_pred(out, index)
 
         return out

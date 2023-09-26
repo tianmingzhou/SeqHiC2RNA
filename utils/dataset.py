@@ -14,7 +14,7 @@ class mBC(Dataset):
         seq = torch.tensor(self.seq[index])
         exp = torch.tensor(self.exp[index])
 
-        return seq.long(), exp.long(), index
+        return seq.long(), exp.float(), index
     
     def __len__(self):
         return self.seq.shape[0]
