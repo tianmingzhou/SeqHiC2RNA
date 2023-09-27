@@ -180,6 +180,9 @@ if __name__=='__main__':
                 }
             }
         args.model_save_path = os.path.join(args.model_save_path, project_name)
+        if os.path.exists(args.model_save_path):
+            os.rmdir(args.model_save_path)
+        os.mkdir(args.model_save_path)
         sweep_id = wandb.sweep(sweep=sweep_configuration, project=project_name)
         wandb.agent(sweep_id, function=train)
     else:

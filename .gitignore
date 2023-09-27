@@ -1,4 +1,5 @@
 /data
 /try.py
 /output
+/wandb
 **/__pycache__/
