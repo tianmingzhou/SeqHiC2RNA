@@ -143,6 +143,10 @@ if __name__=='__main__':
     parser.add_argument('--output_heads', default=3740, type=int)
     parser.add_argument('--target_length', default=240, type=int)
 
+    # parallelize sweep
+    parser.add_argument('--parallelize', action='store_true')
+    parser.add_argument('--sweep_id', type=str)
+
     args = parser.parse_args()
     print(args)
 
@@ -180,12 +184,14 @@ if __name__=='__main__':
                     }
                 }
             }
-        args.model_save_path = os.path.join(args.model_save_path, project_name)
-        if os.path.exists(args.model_save_path):
-            shutil.rmtree(args.model_save_path)
-        os.mkdir(args.model_save_path)
-        sweep_id = wandb.sweep(sweep=sweep_configuration, project=project_name)
-        wandb.agent(sweep_id, function=train)
+            args.model_save_path = os.path.join(args.model_save_path, project_name)
+            if os.path.exists(args.model_save_path):
+                shutil.rmtree(args.model_save_path)
+            os.mkdir(args.model_save_path)
+            sweep_id = wandb.sweep(sweep=sweep_configuration, project=project_name)
+            wandb.agent(sweep_id, function=train)
+        elif args.parallelize:
+            wandb.agent(sweep_id=args.sweep_id, function=train)
     else:
         train()
 
