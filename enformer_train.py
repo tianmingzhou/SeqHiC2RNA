@@ -134,7 +134,7 @@ if __name__=='__main__':
     parser.add_argument('--wd', default=0.0, help='L2 Regularization for Optimizer')
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument("--gpu", type=int, default="0", help="Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0")
-    parser.add_argument("--num", type=int, default=0, help='To distinguish different project')
+    parser.add_argument("--num", type=int, default=0, help='To distinguish different sweep')
 
     # Enformer hyperparameters
     parser.add_argument('--dim', default=1536, type=int)
@@ -165,11 +165,11 @@ if __name__=='__main__':
 
     if args.use_wandb:
         if args.use_sweep:
-            project_name = 'enformer'+str(args.num)
+            sweep_name = 'enformer'+str(args.num)
             sweep_configuration = {
-                'project': project_name,
+                'project': 'enformer',
                 'method': 'grid',
-                'name': 'enformer_sweep_try',
+                'name': sweep_name,
                 'parameters':{
                     'lr':{
                         'values': [1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6],
@@ -184,13 +184,14 @@ if __name__=='__main__':
                     }
                 }
             }
-            args.model_save_path = os.path.join(args.model_save_path, project_name)
+            args.model_save_path = os.path.join(args.model_save_path, sweep_name)
             if os.path.exists(args.model_save_path):
                 shutil.rmtree(args.model_save_path)
             os.mkdir(args.model_save_path)
-            sweep_id = wandb.sweep(sweep=sweep_configuration, project=project_name)
+            sweep_id = wandb.sweep(sweep=sweep_configuration, project='enformer')
             wandb.agent(sweep_id, function=train)
         elif args.parallelize:
+            args.model_save_path = os.path.join(args.model_save_path, 'enformer'+str(args.num))
             wandb.agent(sweep_id=args.sweep_id, function=train)
     else:
         train()
