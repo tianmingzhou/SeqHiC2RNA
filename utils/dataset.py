@@ -24,8 +24,8 @@ def load_data(path, seed, batch_size, num_workers, target_len):
     total_sequences = read_DNAseq_tsv(os.path.join(path, 'sequence_1024_200.tsv'))
     total_expressions = read_Expre_tsv(os.path.join(path, 'expression_cov_1024_200_bulk.tsv'))
 
-    # manually convert 1024-resolution to 128-resolution
-    total_expressions = np.repeat(total_expressions, 8).reshape(total_expressions.shape[0], -1)
+    # # manually convert 1024-resolution to 128-resolution
+    # total_expressions = np.repeat(total_expressions, 8).reshape(total_expressions.shape[0], -1)
 
     # crop the DNA-sequence from two sides
     trim = (target_len - total_expressions.shape[1]) // 2

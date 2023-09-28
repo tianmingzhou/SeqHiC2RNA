@@ -282,9 +282,9 @@ class Enformer(PreTrainedModel):
         # create stem
 
         self.stem = nn.Sequential(
-            nn.Conv1d(4, half_dim, 15, padding = 7),
+            nn.Conv1d(4, half_dim, 15, padding = 7, stride=2),
             Residual(ConvBlock(half_dim)),
-            AttentionPool(half_dim, pool_size = 2)
+            AttentionPool(half_dim, pool_size = 8)
         )
 
         # create conv tower

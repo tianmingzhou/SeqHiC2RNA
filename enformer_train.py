@@ -141,7 +141,7 @@ if __name__=='__main__':
     parser.add_argument('--depth', default=11, type=int, help='Number of transformer blocks')
     parser.add_argument('--heads', default=8, type=int, help='Attention Heads')
     parser.add_argument('--output_heads', default=3740, type=int)
-    parser.add_argument('--target_length', default=1920, type=int)
+    parser.add_argument('--target_length', default=240, type=int)
 
     args = parser.parse_args()
     print(args)
