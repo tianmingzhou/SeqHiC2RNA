@@ -31,6 +31,12 @@ def load_data(path, seed, batch_size, num_workers, target_len):
     trim = (target_len - total_expressions.shape[1]) // 2
     total_expressions = total_expressions[:, -trim:trim]
 
+    # Normalize the Expression data
+    row_min = np.min(total_expressions, axis=1, keepdims=True)
+    row_max = np.max(total_expressions, axis=1, keepdims=True)
+    total_expressions = (total_expressions - row_min) / (row_max - row_min)
+    total_expressions = np.log1p(total_expressions * 1e4)
+
     # generate random indice
     k = int(total_sequences.shape[0]/20)
     indice = np.zeros((total_sequences.shape[0], 1))
