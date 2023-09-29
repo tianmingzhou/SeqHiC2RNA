@@ -117,6 +117,7 @@ def train():
     if args.use_wandb:
         wandb.log({
             'Best Epoch': best_epoch,
+            'Best Valid Pearson_Corr_Coef': best_pearson_corr_coef,
             'Test Pearson_Corr_Coef': mean_test_pearson_corr_coef,
         })
 
