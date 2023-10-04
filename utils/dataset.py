@@ -3,7 +3,7 @@ import torch
 import numpy as np
 
 from torch.utils.data import Dataset, DataLoader
-from utils.utils import read_DNAseq_tsv, read_Expre_tsv
+from utils.utils import read_DNAseq_tsv, read_Expre_tsv, read_Expre_mtx
 
 class mBC(Dataset):
     def __init__(self, seq, exp):
@@ -19,7 +19,7 @@ class mBC(Dataset):
     def __len__(self):
         return self.seq.shape[0]
 
-def load_data(path, seed, batch_size, num_workers, target_len):
+def load_data_bulk(path, seed, batch_size, num_workers, target_len):
     
     total_sequences = read_DNAseq_tsv(os.path.join(path, 'sequence_1024_200.tsv'))
     total_expressions = read_Expre_tsv(os.path.join(path, 'expression_cov_1024_200_bulk.tsv'))
@@ -71,13 +71,10 @@ def load_data(path, seed, batch_size, num_workers, target_len):
 
     return train_loader, valid_loader, test_loader
 
+def load_data_sc(path, seed, batch_size, num_workers, target_len):
+    total_sequences = read_DNAseq_tsv(os.path.join(path, 'sequence_1024_200.tsv'))
+    total_expressions = read_Expre_mtx(os.path.join(path, 'expression_cov_1024_200.mtx'))
 
-
-
-
-
-
-
-
+    
 
 

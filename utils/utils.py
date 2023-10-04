@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 import pandas as pd
+import scanpy as sc
 
 from tqdm import tqdm
 
@@ -28,6 +29,10 @@ def read_DNAseq_tsv(path):
 def read_Expre_tsv(path):
     total_expressions = pd.read_csv(path, sep='\t', header=None)
     return total_expressions.values
+
+def read_Expre_mtx(path):
+    total_expressions = sc.read_mtx(path)
+    return total_expressions
 
 def pearson_corr_coef(x, y, dim = 1, reduce_dims = (-1,)):
     x_centered = x - x.mean(dim = dim, keepdim = True)

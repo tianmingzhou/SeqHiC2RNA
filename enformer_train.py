@@ -8,7 +8,7 @@ import wandb
 import shutil
 
 from utils.utils import seed_all, pearson_corr_coef
-from utils.dataset import load_data
+from utils.dataset import load_data_bulk
 from algo.enformer import Enformer
 from tqdm import tqdm
 
@@ -43,7 +43,7 @@ def train():
         wd = args.wd
         depth = args.depth
 
-    train_loader, valid_loader, test_loader = load_data(
+    train_loader, valid_loader, test_loader = load_data_bulk(
         path = args.data_path, 
         seed = args.seed, 
         batch_size = args.batch_size, 
@@ -64,6 +64,7 @@ def train():
     print('Start training')
     best_pearson_corr_coef = -1
     best_epoch = 0
+    kill_cnt = 0
     for epoch in range(args.epochs):
         train_loss = []
         model.train()
@@ -100,11 +101,17 @@ def train():
         if mean_valid_pearson_corr_coef > best_pearson_corr_coef:
             best_pearson_corr_coef = mean_valid_pearson_corr_coef
             best_epoch = epoch + 1
+            kill_cnt = 0
             if args.use_wandb:
                 torch.save(model.state_dict(), os.path.join(args.model_save_path, run.id))
             else:
                 torch.save(model.state_dict(), os.path.join(args.model_save_path, 'best_model'+str(args.gpu)))
             print("saving model...")
+        else:
+            kill_cnt += 1
+            if kill_cnt >= args.early_stop:
+                print('early stop.')
+                break
         
     # Use the best model to test
     model.eval()
@@ -113,7 +120,7 @@ def train():
     else:
         model.load_state_dict(torch.load(os.path.join(args.model_save_path, 'best_model'+str(args.gpu))))
     mean_test_pearson_corr_coef = evaluation(model, test_loader, args.device)
-    print("Best epoch: {}, Test Pearson_Corr_Coef: {:.5}\n".format(best_epoch, mean_test_pearson_corr_coef)) # We Already plus 1 for best epoch in previous code
+    print("Best epoch: {}, Best Valid Pearson_Corr_Coef: {:.5}, Test Pearson_Corr_Coef: {:.5}\n".format(best_epoch, best_pearson_corr_coef, mean_test_pearson_corr_coef)) # We Already plus 1 for best epoch in previous code
     if args.use_wandb:
         wandb.log({
             'Best Epoch': best_epoch,
@@ -125,17 +132,18 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--data_path', default='./data', help='Path of the dataset')
-    parser.add_argument("--out_path", default="./output", help="Path to save the output")   
-    parser.add_argument("--use_wandb", action='store_true')
-    parser.add_argument("--use_sweep", action='store_true')
+    parser.add_argument('--out_path', default='./output', help='Path to save the output')   
+    parser.add_argument('--use_wandb', action='store_true')
+    parser.add_argument('--use_sweep', action='store_true')
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--batch_size', default=2, type=int)
     parser.add_argument('--num_workers', default=8, type=int)
     parser.add_argument('--lr', default=1e-4, type=float, help='Learning Rate')
     parser.add_argument('--wd', default=0.0, help='L2 Regularization for Optimizer')
     parser.add_argument('--epochs', default=100, type=int)
-    parser.add_argument("--gpu", type=int, default="0", help="Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0")
-    parser.add_argument("--num", type=int, default=0, help='To distinguish different sweep')
+    parser.add_argument('--gpu', type=int, default='0', help='Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0')
+    parser.add_argument('--num', type=int, default=0, help='To distinguish different sweep')
+    parser.add_argument('--early_stop', default=10, type=int, help='Patience for early stop.')
 
     # Enformer hyperparameters
     parser.add_argument('--dim', default=1536, type=int)
