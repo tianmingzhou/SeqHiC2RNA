@@ -62,8 +62,6 @@ def train():
 
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
 
-    mean_valid_pearson_corr_coef = evaluation(model, valid_loader, args.device)
-
     # start training
     print('Start training')
     best_pearson_corr_coef = -1
