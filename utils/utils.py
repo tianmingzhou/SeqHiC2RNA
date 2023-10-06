@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 import scanpy as sc
+import pickle
 
 from tqdm import tqdm
 
@@ -34,8 +35,12 @@ def read_Expre_mtx(path):
     total_expressions = sc.read_mtx(path)
     return total_expressions
 
+def read_1D_HiC(path):
+    with open(path, 'rb') as f:
+        data = pickle.load(f)
+    return data
+    
 def pearson_corr_coef(x, y, dim = 1, reduce_dims = (-1,)):
     x_centered = x - x.mean(dim = dim, keepdim = True)
     y_centered = y - y.mean(dim = dim, keepdim = True)
     return F.cosine_similarity(x_centered, y_centered, dim = dim).mean(dim = reduce_dims)
-    

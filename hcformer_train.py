@@ -9,7 +9,7 @@ import shutil
 
 from utils.utils import seed_all, pearson_corr_coef
 from utils.dataset import load_data_bulk
-from algo.Enformer import Enformer
+from algo.Hcformer import Hcformer
 from tqdm import tqdm
 
 
@@ -21,8 +21,8 @@ def evaluation(model, data_loader, device):
             total_pred = []
             total_exp = []
             for seq, exp, hic_1d, index in data_loader:
-                seq, index = seq.to(device), index.to(device)
-                pred = model(seq, head='human', index=index, return_fetch_pred=True)
+                seq, hic_1d, index = seq.to(device), hic_1d.to(device), index.to(device)
+                pred = model(seq, head='human', index=index, hic_1d=hic_1d ,return_fetch_pred=True)
 
                 total_pred.append(pred.detach().cpu())
                 total_exp.append(exp)
@@ -51,8 +51,9 @@ def train():
         target_len = args.target_length,
         algo = args.hic_1d_algo)
 
-    model = Enformer.from_hparams(
+    model = Hcformer.from_hparams(
         dim = args.dim,
+        seq_dim = args.seq_dim,
         depth = depth,
         heads = args.heads,
         output_heads = dict(human=args.output_heads),
@@ -60,6 +61,8 @@ def train():
     ).to(args.device)
 
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
+
+    mean_valid_pearson_corr_coef = evaluation(model, valid_loader, args.device)
 
     # start training
     print('Start training')
@@ -72,8 +75,8 @@ def train():
         with tqdm(total=len(train_loader), dynamic_ncols=True) as t:
             t.set_description(f'Epoch: {epoch+1}/{args.epochs}')
             for seq, exp, hic_1d, index in train_loader:
-                seq, exp, index = seq.to(args.device), exp.to(args.device), index.to(args.device)
-                loss = model(seq, head='human', target=exp, index=index)
+                seq, exp, hic_1d, index = seq.to(args.device), exp.to(args.device), hic_1d.to(args.device), index.to(args.device)
+                loss = model(seq, head='human', target=exp, hic_1d=hic_1d, index=index)
 
                 train_loss.append(loss.item())
 
@@ -147,8 +150,9 @@ if __name__=='__main__':
     parser.add_argument('--early_stop', default=10, type=int, help='Patience for early stop.')
     parser.add_argument('--hic_1d_algo', default='ab', help='The algorithm to convert 2D Hi-C Contact Map to 1D')
 
-    # Enformer hyperparameters
-    parser.add_argument('--dim', default=768, type=int)
+    # Hcformer hyperparameters
+    parser.add_argument('--dim', default=769, type=int)
+    parser.add_argument('--seq_dim', default=768, type=int)
     parser.add_argument('--depth', default=11, type=int, help='Number of transformer blocks')
     parser.add_argument('--heads', default=8, type=int, help='Attention Heads')
     parser.add_argument('--output_heads', default=3740, type=int)
@@ -167,7 +171,7 @@ if __name__=='__main__':
     args.device = device
     
     # prepare the output
-    args.out_path = os.path.join(args.out_path, 'enformer')
+    args.out_path = os.path.join(args.out_path, 'hcformer')
     os.makedirs(args.out_path, exist_ok=True)
     os.makedirs(os.path.join(args.out_path, 'model'), exist_ok=True)
     args.model_save_path = os.path.join(args.out_path, 'model')
@@ -176,9 +180,9 @@ if __name__=='__main__':
 
     if args.use_wandb:
         if args.use_sweep:
-            sweep_name = 'enformer'+str(args.num)
+            sweep_name = 'hcformer'+str(args.num)
             sweep_configuration = {
-                'project': 'enformer',
+                'project': 'hcformer',
                 'method': 'random',
                 'name': sweep_name,
                 'parameters':{
@@ -199,10 +203,10 @@ if __name__=='__main__':
             if os.path.exists(args.model_save_path):
                 shutil.rmtree(args.model_save_path)
             os.mkdir(args.model_save_path)
-            sweep_id = wandb.sweep(sweep=sweep_configuration, project='enformer')
+            sweep_id = wandb.sweep(sweep=sweep_configuration, project='hcformer')
             wandb.agent(sweep_id, function=train)
         elif args.parallelize:
-            args.model_save_path = os.path.join(args.model_save_path, 'enformer'+str(args.num))
+            args.model_save_path = os.path.join(args.model_save_path, 'hcformer'+str(args.num))
             wandb.agent(sweep_id=args.sweep_id, function=train)
     else:
         train()
