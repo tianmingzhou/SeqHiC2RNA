@@ -79,7 +79,7 @@ def train():
 
                 # compute loss and metric
                 tr_loss = poisson_loss(pred, exp.unsqueeze(-1))
-                tr_pearson_corr_coef = pearson_corr_coef(pred, exp.unsqueeze(-1))
+                tr_pearson_corr_coef = pearson_corr_coef(pred.detach().cpu(), exp.unsqueeze(-1).detach().cpu())
                 train_loss.append(tr_loss.item())
                 train_pearson_corr_coef.append(tr_pearson_corr_coef.item())
 
