@@ -58,6 +58,7 @@ def train():
         heads = args.heads,
         output_heads = dict(human=args.output_heads),
         target_length = args.target_length,
+        dim_divisible_by = args.dim / 12
     ).to(args.device)
 
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
