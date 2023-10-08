@@ -30,15 +30,13 @@ def log(t, eps = 1e-20):
 
 # losses and metrics
 
-def poisson_loss(pred, target, index):
-    index0 = torch.arange(pred.shape[0])
-    pred = pred[index0, :, index]
-    return (pred - target * log(pred)).mean()
+def pearson_corr_coef(x, y, dim = 1, reduce_dims = 0):
+    x_centered = x - x.mean(dim = dim, keepdim = True)
+    y_centered = y - y.mean(dim = dim, keepdim = True)
+    return F.cosine_similarity(x_centered, y_centered, dim = dim).mean(dim = reduce_dims)
 
-def fetch_pred(x, index):
-    index0 = torch.arange(x.shape[0])
-    x = x[index0, :, index]
-    return x
+def poisson_loss(pred, target):
+    return (pred - target * log(pred)).mean()
 
 # relative positional encoding functions
 

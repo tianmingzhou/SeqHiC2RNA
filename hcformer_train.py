@@ -7,9 +7,10 @@ import os
 import wandb
 import shutil
 
-from utils.utils import seed_all, pearson_corr_coef
+from utils.utils import seed_all
 from utils.dataset import load_data_bulk
 from algo.Hcformer import Hcformer
+from algo.module import pearson_corr_coef, poisson_loss
 from tqdm import tqdm
 
 
@@ -20,17 +21,17 @@ def evaluation(model, data_loader, device):
             t.set_description('Evaluation: ')
             total_pred = []
             total_exp = []
-            for seq, exp, hic_1d, index in data_loader:
-                seq, hic_1d, index = seq.to(device), hic_1d.to(device), index.to(device)
-                pred = model(seq, head='human', index=index, hic_1d=hic_1d ,return_fetch_pred=True)
+            for seq, exp, hic_1d in data_loader:
+                seq, hic_1d = seq.to(device), hic_1d.to(device)
+                pred = model(seq, head='human', hic_1d=hic_1d)
 
                 total_pred.append(pred.detach().cpu())
-                total_exp.append(exp)
+                total_exp.append(exp.unsqueeze(-1))
                 t.update()
             total_pred = torch.concat(total_pred, dim=0)
             total_exp  = torch.concat(total_exp,  dim=0)
 
-    return pearson_corr_coef(total_pred, total_exp)
+    return pearson_corr_coef(total_pred, total_exp)[0]
 
 def train():
     if args.use_wandb:
@@ -58,6 +59,7 @@ def train():
         heads = args.heads,
         output_heads = dict(human=args.output_heads),
         target_length = args.target_length,
+        hic_1d_feat_dim = args.hic_1d_feat_dim,
     ).to(args.device)
 
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
@@ -69,34 +71,42 @@ def train():
     kill_cnt = 0
     for epoch in range(args.epochs):
         train_loss = []
+        train_pearson_corr_coef = []
         model.train()
         with tqdm(total=len(train_loader), dynamic_ncols=True) as t:
             t.set_description(f'Epoch: {epoch+1}/{args.epochs}')
-            for seq, exp, hic_1d, index in train_loader:
-                seq, exp, hic_1d, index = seq.to(args.device), exp.to(args.device), hic_1d.to(args.device), index.to(args.device)
-                loss = model(seq, head='human', target=exp, hic_1d=hic_1d, index=index)
+            for seq, exp, hic_1d in train_loader:
+                seq, exp, hic_1d = seq.to(args.device), exp.to(args.device), hic_1d.to(args.device)
+                pred = model(seq, head='human', hic_1d=hic_1d)
 
-                train_loss.append(loss.item())
+                # compute loss and metric
+                tr_loss = poisson_loss(pred, exp.unsqueeze(-1))
+                tr_pearson_corr_coef = pearson_corr_coef(pred, exp.unsqueeze(-1))
+                train_loss.append(tr_loss.item())
+                train_pearson_corr_coef.append(tr_pearson_corr_coef.item()) 
 
                 # backward
                 optimizer.zero_grad()
-                loss.backward()
+                tr_loss.backward()
                 optimizer.step()
 
                 t.update()
                 t.set_postfix({
-                    'train_loss': f'{loss.item():.4f}',
+                    'train_loss': f'{tr_loss.item():.4f}',
+                    'train_pearson_corr_coef': f'{tr_pearson_corr_coef.item():.4f}',
                 })
         train_loss = np.mean(train_loss)
+        train_pearson_corr_coef = np.mean(train_pearson_corr_coef)
 
         # validate
         mean_valid_pearson_corr_coef = evaluation(model, valid_loader, args.device)
 
-        print("In epoch {}, Train Loss: {:.5}, Valid Pearson_Corr_Coef: {:.5}\n".format(epoch+1, train_loss, mean_valid_pearson_corr_coef))
+        print("In epoch {}, Train Loss: {:.5}, Train Pearson_Corr_Coef: {:.5}, Valid Pearson_Corr_Coef: {:.5}\n".format(epoch+1, train_loss, train_pearson_corr_coef, mean_valid_pearson_corr_coef))
         if args.use_wandb:
             wandb.log({
                 'epoch': epoch+1,
                 'Train Loss': train_loss,
+                'Train Pearson_Corr_Coef': train_pearson_corr_coef,
                 'Valid Pearson_Corr_Coef': mean_valid_pearson_corr_coef,
             })
 
@@ -153,8 +163,9 @@ if __name__=='__main__':
     parser.add_argument('--seq_dim', default=768, type=int)
     parser.add_argument('--depth', default=11, type=int, help='Number of transformer blocks')
     parser.add_argument('--heads', default=8, type=int, help='Attention Heads')
-    parser.add_argument('--output_heads', default=3740, type=int)
+    parser.add_argument('--output_heads', default=1, type=int)
     parser.add_argument('--target_length', default=240, type=int)
+    parser.add_argument('--hic_1d_feat_dim', default=0, type=int)
 
     # parallelize sweep
     parser.add_argument('--parallelize', action='store_true')

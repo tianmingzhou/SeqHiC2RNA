@@ -8,8 +8,7 @@ from einops.layers.torch import Rearrange
 from transformers import PreTrainedModel
 
 from algo.module import Residual, AttentionPool, Attention, TargetLengthCrop, GELU
-from algo.module import ConvBlock, exponential_linspace_int, map_values, exists,\
-poisson_loss, fetch_pred
+from algo.module import ConvBlock, exponential_linspace_int, map_values, exists
 
 from enformer_pytorch.data import str_to_one_hot, seq_indices_to_one_hot
 
@@ -31,7 +30,6 @@ class Hcformer(PreTrainedModel):
         half_seq_dim = config.seq_dim // 2
     
         # create stem
-
         self.stem = nn.Sequential(
             nn.Conv1d(4, half_seq_dim, 15, padding = 7, stride=2),
             Residual(ConvBlock(half_seq_dim)),
@@ -39,7 +37,6 @@ class Hcformer(PreTrainedModel):
         )
 
         # create conv tower
-
         filter_list = exponential_linspace_int(half_seq_dim, config.seq_dim, num = (config.num_downsamples - 1), divisible_by = config.dim_divisible_by)
         filter_list = [half_seq_dim, *filter_list]
 
@@ -53,6 +50,11 @@ class Hcformer(PreTrainedModel):
 
         self.conv_tower = nn.Sequential(*conv_layers)
 
+        # deal with hic_1d data
+        # if config.hic_1d_feat_dim > 0:
+
+
+        # transformer
         transformer = []
         for _ in range(config.depth):
             transformer.append(nn.Sequential(
@@ -153,14 +155,8 @@ class Hcformer(PreTrainedModel):
     def forward(
         self,
         x,
-        target = None,
-        index = None,
-        hic_1d = None,
-        return_fetch_pred = None,
-        return_embeddings = False,
-        return_only_embeddings = False,
+        hic_1d,
         head = None,
-        target_length = None
     ):
         if isinstance(x, list):
             x = str_to_one_hot(x)
@@ -168,40 +164,15 @@ class Hcformer(PreTrainedModel):
         elif x.dtype == torch.long:
             x = seq_indices_to_one_hot(x)
 
-        no_batch = x.ndim == 2
-
-        if no_batch:
-            x = rearrange(x, '... -> () ...')
-
-        if exists(target_length):
-            self.set_target_length(target_length)
-
         # trunk_fn = self.trunk_checkpointed if self.use_checkpointing else self._trunk
         x = self.seq_conv(x)
         x = torch.concat((x, hic_1d.unsqueeze(-1)), dim=2)
         x = self._trunk(x)
-
-        if no_batch:
-            x = rearrange(x, '() ... -> ...')
-
-        if return_only_embeddings:
-            return x
 
         out = map_values(lambda fn: fn(x), self._heads)
 
         if exists(head):
             assert head in self._heads, f'head {head} not found'
             out = out[head]
-
-        if exists(target):
-            assert exists(head), 'head must be passed in if one were to calculate loss directly with targets'
-
-            return poisson_loss(out, target, index)
-
-        if return_embeddings:
-            return out, x
-
-        if return_fetch_pred:
-            return fetch_pred(out, index)
 
         return out

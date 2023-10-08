@@ -16,7 +16,7 @@ class bulk_mBC(Dataset):
         exp = torch.tensor(self.exp[index])
         hic_1d = torch.tensor(self.hic_1d[index])
 
-        return seq.long(), exp.float(), hic_1d.float(), index
+        return seq.long(), exp.float(), hic_1d.float()
     
     def __len__(self):
         return self.seq.shape[0]

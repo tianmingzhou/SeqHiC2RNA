@@ -19,6 +19,7 @@ class EnformerConfig(PretrainedConfig):
         num_downsamples = 7,    # genetic sequence is downsampled 2 ** 7 == 128x in default Enformer - can be changed for higher resolution
         dim_divisible_by = 128,
         use_tf_gamma = False,
+        hic_1d_feat_dim = 0,
         **kwargs,
     ):
         self.dim = dim
@@ -34,6 +35,7 @@ class EnformerConfig(PretrainedConfig):
         self.num_downsamples = num_downsamples
         self.dim_divisible_by = dim_divisible_by
         self.use_tf_gamma = use_tf_gamma
+        self.hic_1d_feat_dim = hic_1d_feat_dim
 
         super().__init__(**kwargs)
 
