@@ -69,7 +69,8 @@ def train():
     kill_cnt = 0
     for epoch in range(args.epochs):
         train_loss = []
-        train_pearson_corr_coef = []
+        train_pred = []
+        train_exp = []
         model.train()
         with tqdm(total=len(train_loader), dynamic_ncols=True) as t:
             t.set_description(f'Epoch: {epoch+1}/{args.epochs}')
@@ -79,9 +80,10 @@ def train():
 
                 # compute loss and metric
                 tr_loss = poisson_loss(pred, exp.unsqueeze(-1))
-                tr_pearson_corr_coef = pearson_corr_coef(pred.detach().cpu(), exp.unsqueeze(-1).detach().cpu())
                 train_loss.append(tr_loss.item())
-                train_pearson_corr_coef.append(tr_pearson_corr_coef.item())
+
+                train_pred.append(pred.detach().cpu())
+                train_exp.append(exp.unsqueeze(-1).detach().cpu())
 
                 # backward
                 optimizer.zero_grad()
@@ -91,10 +93,11 @@ def train():
                 t.update()
                 t.set_postfix({
                     'train_loss': f'{tr_loss.item():.4f}',
-                    'train_pearson_corr_coef': f'{tr_pearson_corr_coef.item():.4f}',
                 })
         train_loss = np.mean(train_loss)
-        train_pearson_corr_coef = np.mean(train_pearson_corr_coef)
+        train_pred = torch.concat(train_pred, dim=0)
+        train_exp = torch.concat(train_exp, dim=0)
+        train_pearson_corr_coef = pearson_corr_coef(train_pred, train_exp)[0]
 
         # validate
         mean_valid_pearson_corr_coef = evaluation(model, valid_loader, args.device)
