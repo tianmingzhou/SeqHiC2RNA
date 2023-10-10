@@ -8,7 +8,7 @@ import wandb
 import shutil
 
 from utils.utils import seed_all
-from utils.dataset import load_data_bulk
+from utils.dataset import load_data_bulk_enf
 from algo.Enformer import Enformer
 from algo.module import pearson_corr_coef, poisson_loss
 from tqdm import tqdm
@@ -21,7 +21,7 @@ def evaluation(model, data_loader, device):
             t.set_description('Evaluation: ')
             total_pred = []
             total_exp = []
-            for seq, exp, hic_1d in data_loader:
+            for seq, exp in data_loader:
                 seq = seq.to(device)
                 pred = model(seq, head='human')
 
@@ -44,13 +44,12 @@ def train():
         wd = args.wd
         depth = args.depth
 
-    train_loader, valid_loader, test_loader = load_data_bulk(
+    train_loader, valid_loader, test_loader = load_data_bulk_enf(
         path = args.data_path, 
         seed = args.seed, 
         batch_size = args.batch_size, 
         num_workers = args.num_workers, 
-        target_len = args.target_length,
-        algo = args.hic_1d_algo)
+        target_len = args.target_length,)
 
     model = Enformer.from_hparams(
         dim = args.dim,
@@ -74,7 +73,7 @@ def train():
         model.train()
         with tqdm(total=len(train_loader), dynamic_ncols=True) as t:
             t.set_description(f'Epoch: {epoch+1}/{args.epochs}')
-            for seq, exp, hic_1d in train_loader:
+            for seq, exp in train_loader:
                 seq, exp = seq.to(args.device), exp.to(args.device)
                 pred = model(seq, head='human')
 
@@ -155,7 +154,6 @@ if __name__=='__main__':
     parser.add_argument('--gpu', type=int, default='0', help='Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0')
     parser.add_argument('--num', type=int, default=0, help='To distinguish different sweep')
     parser.add_argument('--early_stop', default=10, type=int, help='Patience for early stop.')
-    parser.add_argument('--hic_1d_algo', default='ab', help='The algorithm to convert 2D Hi-C Contact Map to 1D')
 
     # Enformer hyperparameters
     parser.add_argument('--dim', default=768, type=int)

@@ -8,7 +8,7 @@ import wandb
 import shutil
 
 from utils.utils import seed_all
-from utils.dataset import load_data_bulk
+from utils.dataset import load_data_bulk_hcf
 from algo.Hcformer import Hcformer
 from algo.module import pearson_corr_coef, poisson_loss
 from tqdm import tqdm
@@ -44,22 +44,22 @@ def train():
         wd = args.wd
         depth = args.depth
 
-    train_loader, valid_loader, test_loader = load_data_bulk(
+    train_loader, valid_loader, test_loader = load_data_bulk_hcf(
         path = args.data_path, 
         seed = args.seed, 
         batch_size = args.batch_size, 
         num_workers = args.num_workers, 
-        target_len = args.target_length,
-        algo = args.hic_1d_algo)
+        target_len = args.target_length)
 
     model = Hcformer.from_hparams(
         dim = args.dim,
-        seq_dim = args.seq_dim,
+        seq_dim = args.dim,
         depth = depth,
         heads = args.heads,
         output_heads = dict(human=args.output_heads),
         target_length = args.target_length,
-        hic_1d_feat_dim = args.hic_1d_feat_dim,
+        dim_divisible_by = args.dim / 12,
+        hic_1d_feat_dim = args.dim,
     ).to(args.device)
 
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
@@ -81,7 +81,7 @@ def train():
 
                 # compute loss and metric
                 tr_loss = poisson_loss(pred, exp.unsqueeze(-1))
-                tr_pearson_corr_coef = pearson_corr_coef(pred, exp.unsqueeze(-1))
+                tr_pearson_corr_coef = pearson_corr_coef(pred.detach().cpu(), exp.unsqueeze(-1).detach().cpu())
                 train_loss.append(tr_loss.item())
                 train_pearson_corr_coef.append(tr_pearson_corr_coef.item()) 
 
@@ -156,16 +156,15 @@ if __name__=='__main__':
     parser.add_argument('--gpu', type=int, default='0', help='Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0')
     parser.add_argument('--num', type=int, default=0, help='To distinguish different sweep')
     parser.add_argument('--early_stop', default=10, type=int, help='Patience for early stop.')
-    parser.add_argument('--hic_1d_algo', default='ab', help='The algorithm to convert 2D Hi-C Contact Map to 1D')
 
     # Hcformer hyperparameters
-    parser.add_argument('--dim', default=769, type=int)
+    parser.add_argument('--dim', default=768, type=int)
     parser.add_argument('--seq_dim', default=768, type=int)
     parser.add_argument('--depth', default=11, type=int, help='Number of transformer blocks')
     parser.add_argument('--heads', default=8, type=int, help='Attention Heads')
     parser.add_argument('--output_heads', default=1, type=int)
     parser.add_argument('--target_length', default=240, type=int)
-    parser.add_argument('--hic_1d_feat_dim', default=0, type=int)
+    parser.add_argument('--hic_1d_feat_dim', default=768, type=int)
 
     # parallelize sweep
     parser.add_argument('--parallelize', action='store_true')

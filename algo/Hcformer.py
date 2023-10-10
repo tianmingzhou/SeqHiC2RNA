@@ -50,9 +50,13 @@ class Hcformer(PreTrainedModel):
 
         self.conv_tower = nn.Sequential(*conv_layers)
 
-        # deal with hic_1d data
-        # if config.hic_1d_feat_dim > 0:
-
+        # hic_1d data transformation
+        self.hic_1d_transform = nn.Sequential(
+            nn.Linear(config.hic_1d_feat_num, config.hic_1d_feat_dim),
+            nn.ReLU(),
+            nn.Dropout(config.dropout_rate),
+            nn.Linear(config.hic_1d_feat_dim, config.hic_1d_feat_dim)
+        )
 
         # transformer
         transformer = []
@@ -166,7 +170,8 @@ class Hcformer(PreTrainedModel):
 
         # trunk_fn = self.trunk_checkpointed if self.use_checkpointing else self._trunk
         x = self.seq_conv(x)
-        x = torch.concat((x, hic_1d.unsqueeze(-1)), dim=2)
+        hic_1d = self.hic_1d_transform(hic_1d)
+        x = x + hic_1d
         x = self._trunk(x)
 
         out = map_values(lambda fn: fn(x), self._heads)
