@@ -2,4 +2,5 @@
 /output
 /wandb
 /try
+/algo/pretrain
 **/__pycache__/

@@ -33,9 +33,9 @@ class Enformer(PreTrainedModel):
         # create stem
 
         self.stem = nn.Sequential(
-            nn.Conv1d(4, half_dim, 15, padding = 7, stride=2),
+            nn.Conv1d(4, half_dim, 15, padding = 7),
             Residual(ConvBlock(half_dim)),
-            AttentionPool(half_dim, pool_size = 8)
+            AttentionPool(half_dim, pool_size = 2)
         )
 
         # create conv tower
@@ -83,6 +83,13 @@ class Enformer(PreTrainedModel):
 
         self.transformer = nn.Sequential(*transformer)
 
+        # final pooling
+        self.pool = nn.Sequential(
+            Rearrange('b n d -> b d n'),
+            AttentionPool(config.dim, pool_size=8),
+            Rearrange('b d n -> b n d')
+        )
+
         # target cropping
 
         self.target_length = config.target_length
@@ -106,6 +113,7 @@ class Enformer(PreTrainedModel):
             self.conv_tower,
             Rearrange('b d n -> b n d'),
             self.transformer,
+            self.pool,
             self.crop_final,
             self.final_pointwise
         )
@@ -144,6 +152,7 @@ class Enformer(PreTrainedModel):
         x = self.conv_tower(x)
         x = rearrange(x, 'b d n -> b n d')
         x = checkpoint_sequential(self.transformer, len(self.transformer), x)
+        x = self.pool(x)
         x = self.crop_final(x)
         x = self.final_pointwise(x)
         return x

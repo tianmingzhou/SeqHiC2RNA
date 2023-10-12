@@ -1,6 +1,8 @@
 import torch
 from torch import nn
 from torch.utils.checkpoint import checkpoint_sequential
+import sys
+sys.path.append('..')
 
 from einops import rearrange
 from einops.layers.torch import Rearrange
@@ -10,7 +12,7 @@ from transformers import PreTrainedModel
 from algo.module import Residual, AttentionPool, Attention, TargetLengthCrop, GELU
 from algo.module import ConvBlock, exponential_linspace_int, map_values, exists
 
-from enformer_pytorch.data import str_to_one_hot, seq_indices_to_one_hot
+from utils.data import str_to_one_hot, seq_indices_to_one_hot
 
 from algo.config import HcformerConfig
 
