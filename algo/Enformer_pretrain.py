@@ -107,16 +107,28 @@ class Enformer(PreTrainedModel):
 
         # create trunk sequential module
 
-        self._trunk = nn.Sequential(
-            Rearrange('b n d -> b d n'),
-            self.stem,
-            self.conv_tower,
-            Rearrange('b d n -> b n d'),
-            self.transformer,
-            self.pool,
-            self.crop_final,
-            self.final_pointwise
-        )
+        if config.pool_after_transformer:
+            self._trunk = nn.Sequential(
+                Rearrange('b n d -> b d n'),
+                self.stem,
+                self.conv_tower,
+                Rearrange('b d n -> b n d'),
+                self.transformer,
+                self.pool,                
+                self.crop_final,
+                self.final_pointwise
+            )
+        else:
+            self._trunk = nn.Sequential(
+                Rearrange('b n d -> b d n'),
+                self.stem,
+                self.conv_tower,
+                Rearrange('b d n -> b n d'),
+                self.pool,                
+                self.transformer,
+                self.crop_final,
+                self.final_pointwise
+            )
 
         # create final heads for human and mouse
 
@@ -146,16 +158,16 @@ class Enformer(PreTrainedModel):
     def heads(self):
         return self._heads
 
-    def trunk_checkpointed(self, x):
-        x = rearrange(x, 'b n d -> b d n')
-        x = self.stem(x)
-        x = self.conv_tower(x)
-        x = rearrange(x, 'b d n -> b n d')
-        x = checkpoint_sequential(self.transformer, len(self.transformer), x)
-        x = self.pool(x)
-        x = self.crop_final(x)
-        x = self.final_pointwise(x)
-        return x
+    # def trunk_checkpointed(self, x):
+    #     x = rearrange(x, 'b n d -> b d n')
+    #     x = self.stem(x)
+    #     x = self.conv_tower(x)
+    #     x = rearrange(x, 'b d n -> b n d')
+    #     x = self.pool(x)
+    #     x = checkpoint_sequential(self.transformer, len(self.transformer), x)
+    #     x = self.crop_final(x)
+    #     x = self.final_pointwise(x)
+    #     return x
 
     def forward(
         self,

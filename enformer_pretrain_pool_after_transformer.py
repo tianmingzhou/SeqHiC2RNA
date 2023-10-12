@@ -57,9 +57,10 @@ def train():
         output_heads = dict(human=args.output_heads),
         target_length = args.target_length,
         dim_divisible_by = 1536 / 12,
-        use_checkpointing = True,
+        pool_after_transformer = True,
+        use_checkpointing = False,
     ).to(args.device)
-
+ 
     # load pretrain parameter
     model.stem.load_state_dict(torch.load(os.path.join(args.pretrain_path, 'stem.pt')))
     for param in model.stem.parameters():
@@ -165,7 +166,7 @@ if __name__=='__main__':
     parser.add_argument('--use_wandb', action='store_true')
     parser.add_argument('--use_sweep', action='store_true')
     parser.add_argument('--seed', default=0, type=int)
-    parser.add_argument('--batch_size', default=1, type=int)
+    parser.add_argument('--batch_size', default=2, type=int)
     parser.add_argument('--num_workers', default=8, type=int)
     parser.add_argument('--lr', default=1e-4, type=float, help='Learning Rate')
     parser.add_argument('--wd', default=0.0, help='L2 Regularization for Optimizer')
@@ -201,7 +202,7 @@ if __name__=='__main__':
 
     if args.use_wandb:
         if args.use_sweep:
-            sweep_name = 'enformer_pretrain'+str(args.num)
+            sweep_name = 'enformer_pretrain_pool_after_transformer'+str(args.num)
             sweep_configuration = {
                 'project': 'enformer_pretrain',
                 'method': 'random',
