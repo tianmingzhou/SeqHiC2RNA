@@ -30,28 +30,28 @@ class Enformer(PreTrainedModel):
         half_dim = config.dim // 2
         twice_dim = config.dim * 2
 
-        # create stem
+        # # create stem
 
-        self.stem = nn.Sequential(
-            nn.Conv1d(4, half_dim, 15, padding = 7),
-            Residual(ConvBlock(half_dim)),
-            AttentionPool(half_dim, pool_size = 2)
-        )
+        # self.stem = nn.Sequential(
+        #     nn.Conv1d(4, half_dim, 15, padding = 7),
+        #     Residual(ConvBlock(half_dim)),
+        #     AttentionPool(half_dim, pool_size = 2)
+        # )
 
-        # create conv tower
+        # # create conv tower
 
-        filter_list = exponential_linspace_int(half_dim, config.dim, num = (config.num_downsamples - 1), divisible_by = config.dim_divisible_by)
-        filter_list = [half_dim, *filter_list]
+        # filter_list = exponential_linspace_int(half_dim, config.dim, num = (config.num_downsamples - 1), divisible_by = config.dim_divisible_by)
+        # filter_list = [half_dim, *filter_list]
 
-        conv_layers = []
-        for dim_in, dim_out in zip(filter_list[:-1], filter_list[1:]):
-            conv_layers.append(nn.Sequential(
-                ConvBlock(dim_in, dim_out, kernel_size = 5),
-                Residual(ConvBlock(dim_out, dim_out, 1)),
-                AttentionPool(dim_out, pool_size = 2)
-            ))
+        # conv_layers = []
+        # for dim_in, dim_out in zip(filter_list[:-1], filter_list[1:]):
+        #     conv_layers.append(nn.Sequential(
+        #         ConvBlock(dim_in, dim_out, kernel_size = 5),
+        #         Residual(ConvBlock(dim_out, dim_out, 1)),
+        #         AttentionPool(dim_out, pool_size = 2)
+        #     ))
 
-        self.conv_tower = nn.Sequential(*conv_layers)
+        # self.conv_tower = nn.Sequential(*conv_layers)
 
         # transformer
 
@@ -99,7 +99,7 @@ class Enformer(PreTrainedModel):
 
         self.final_pointwise = nn.Sequential(
             Rearrange('b n d -> b d n'),
-            ConvBlock(filter_list[-1], twice_dim, 1),
+            ConvBlock(config.dim, twice_dim, 1),
             Rearrange('b d n -> b n d'),
             nn.Dropout(config.dropout_rate / 8),
             GELU()
@@ -109,10 +109,10 @@ class Enformer(PreTrainedModel):
 
         if config.pool_after_transformer:
             self._trunk = nn.Sequential(
-                Rearrange('b n d -> b d n'),
-                self.stem,
-                self.conv_tower,
-                Rearrange('b d n -> b n d'),
+                # Rearrange('b n d -> b d n'),
+                # self.stem,
+                # self.conv_tower,
+                # Rearrange('b d n -> b n d'),
                 self.transformer,
                 self.pool,                
                 self.crop_final,
@@ -120,10 +120,10 @@ class Enformer(PreTrainedModel):
             )
         else:
             self._trunk = nn.Sequential(
-                Rearrange('b n d -> b d n'),
-                self.stem,
-                self.conv_tower,
-                Rearrange('b d n -> b n d'),
+                # Rearrange('b n d -> b d n'),
+                # self.stem,
+                # self.conv_tower,
+                # Rearrange('b d n -> b n d'),
                 self.pool,                
                 self.transformer,
                 self.crop_final,
