@@ -61,12 +61,6 @@ def train():
     ).to(args.device)
  
     # load pretrain parameter
-    model.stem.load_state_dict(torch.load(os.path.join(args.pretrain_path, 'stem.pt')))
-    for param in model.stem.parameters():
-        param.requires_grad = False
-    model.conv_tower.load_state_dict(torch.load(os.path.join(args.pretrain_path, 'conv_tower.pt')))
-    for param in model.conv_tower.parameters():
-        param.requires_grad = False
     if args.load_transformer:
         model.transformer.load_state_dict(torch.load(os.path.join(args.pretrain_path, 'transformer.pt')))
         for param in model.transformer.parameters():

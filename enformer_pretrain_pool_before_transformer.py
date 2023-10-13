@@ -61,16 +61,8 @@ def train():
         pool_after_transformer = False,
         use_checkpointing = False,
     ).to(args.device)
- 
-    # load pretrain parameter
-    model.stem.load_state_dict(torch.load(os.path.join(args.pretrain_path, 'stem.pt')))
-    for param in model.stem.parameters():
-        param.requires_grad = False
-    model.conv_tower.load_state_dict(torch.load(os.path.join(args.pretrain_path, 'conv_tower.pt')))
-    for param in model.conv_tower.parameters():
-        param.requires_grad = False
 
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=lr, weight_decay=wd)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
 
     # start training
     print('Start training')
