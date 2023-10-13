@@ -27,34 +27,9 @@ class Enformer(PreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.dim = config.dim
-        half_dim = config.dim // 2
         twice_dim = config.dim * 2
 
-        # # create stem
-
-        # self.stem = nn.Sequential(
-        #     nn.Conv1d(4, half_dim, 15, padding = 7),
-        #     Residual(ConvBlock(half_dim)),
-        #     AttentionPool(half_dim, pool_size = 2)
-        # )
-
-        # # create conv tower
-
-        # filter_list = exponential_linspace_int(half_dim, config.dim, num = (config.num_downsamples - 1), divisible_by = config.dim_divisible_by)
-        # filter_list = [half_dim, *filter_list]
-
-        # conv_layers = []
-        # for dim_in, dim_out in zip(filter_list[:-1], filter_list[1:]):
-        #     conv_layers.append(nn.Sequential(
-        #         ConvBlock(dim_in, dim_out, kernel_size = 5),
-        #         Residual(ConvBlock(dim_out, dim_out, 1)),
-        #         AttentionPool(dim_out, pool_size = 2)
-        #     ))
-
-        # self.conv_tower = nn.Sequential(*conv_layers)
-
         # transformer
-
         transformer = []
         for _ in range(config.depth):
             transformer.append(nn.Sequential(
@@ -109,10 +84,6 @@ class Enformer(PreTrainedModel):
 
         if config.pool_after_transformer:
             self._trunk = nn.Sequential(
-                # Rearrange('b n d -> b d n'),
-                # self.stem,
-                # self.conv_tower,
-                # Rearrange('b d n -> b n d'),
                 self.transformer,
                 self.pool,                
                 self.crop_final,
@@ -120,10 +91,6 @@ class Enformer(PreTrainedModel):
             )
         else:
             self._trunk = nn.Sequential(
-                # Rearrange('b n d -> b d n'),
-                # self.stem,
-                # self.conv_tower,
-                # Rearrange('b d n -> b n d'),
                 self.pool,                
                 self.transformer,
                 self.crop_final,
@@ -158,27 +125,11 @@ class Enformer(PreTrainedModel):
     def heads(self):
         return self._heads
 
-    # def trunk_checkpointed(self, x):
-    #     x = rearrange(x, 'b n d -> b d n')
-    #     x = self.stem(x)
-    #     x = self.conv_tower(x)
-    #     x = rearrange(x, 'b d n -> b n d')
-    #     x = self.pool(x)
-    #     x = checkpoint_sequential(self.transformer, len(self.transformer), x)
-    #     x = self.crop_final(x)
-    #     x = self.final_pointwise(x)
-    #     return x
-
     def forward(
         self,
         x,
         head = None,
     ):
-        if isinstance(x, list):
-            x = str_to_one_hot(x)
-
-        elif x.dtype == torch.long:
-            x = seq_indices_to_one_hot(x)
 
         trunk_fn = self.trunk_checkpointed if self.use_checkpointing else self._trunk
         x = trunk_fn(x)

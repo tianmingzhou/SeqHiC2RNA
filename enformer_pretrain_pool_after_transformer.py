@@ -8,7 +8,7 @@ import wandb
 import shutil
 
 from utils.utils import seed_all
-from utils.dataset import load_data_bulk_enf
+from utils.dataset import load_data_bulk_pretrain
 from algo.Enformer_pretrain import Enformer
 from algo.module import pearson_corr_coef, poisson_loss
 from tqdm import tqdm
@@ -42,13 +42,12 @@ def train():
         lr = args.lr
         wd = args.wd
 
-    train_loader, valid_loader, test_loader = load_data_bulk_enf(
+    train_loader, valid_loader, test_loader = load_data_bulk_pretrain(
         path = args.data_path, 
         seed = args.seed, 
         batch_size = args.batch_size, 
         num_workers = args.num_workers, 
-        target_len = args.target_length,
-        pretrain = True)
+        target_len = args.target_length,)
 
     model = Enformer.from_hparams(
         dim = 1536,
