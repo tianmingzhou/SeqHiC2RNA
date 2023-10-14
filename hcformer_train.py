@@ -218,6 +218,8 @@ if __name__=='__main__':
             wandb.agent(sweep_id, function=train)
         elif args.parallelize:
             args.model_save_path = os.path.join(args.model_save_path, 'hcformer'+str(args.num))
+            if not os.path.exists(args.model_save_path):
+                os.mkdir(args.model_save_path)
             wandb.agent(sweep_id=args.sweep_id, function=train)
     else:
         train()
