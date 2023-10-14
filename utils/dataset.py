@@ -62,8 +62,8 @@ def load_data_sc(path, seed, batch_size, num_workers, target_len):
     
 
 
-def load_data_bulk_pretrain(path, seed, batch_size, num_workers, target_len):
-    total_sequences = torch.load(os.path.join(path ,'sequence_vector.pt'))
+def load_data_bulk_pretrain(path,pretrain_vec_path, seed, batch_size, num_workers, target_len):
+    total_sequences = torch.load(os.path.join(pretrain_vec_path ,'sequence_vector.pt'))
     total_expressions = read_Expre_tsv(os.path.join(path, 'expression_cov_1024_200_bulk.tsv'))
 
     # crop the DNA-sequence from two sides

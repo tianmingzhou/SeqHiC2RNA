@@ -44,6 +44,7 @@ def train():
 
     train_loader, valid_loader, test_loader = load_data_bulk_pretrain(
         path = args.data_path, 
+        pretrain_vec_path=args.pretrain_vec_path,
         seed = args.seed, 
         batch_size = args.batch_size, 
         num_workers = args.num_workers, 
@@ -155,6 +156,7 @@ if __name__=='__main__':
 
     parser.add_argument('--data_path', default='./data', help='Path of the dataset')
     parser.add_argument('--out_path', default='./output', help='Path to save the output')
+    parser.add_argument('--pretrain_vec_path', default='./data', help='Path of the pretrain vector')
     parser.add_argument('--pretrain_path', default='./algo/pretrain', help='Path to save the pretrain parameter')
     parser.add_argument('--use_wandb', action='store_true')
     parser.add_argument('--use_sweep', action='store_true')
