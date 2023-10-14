@@ -23,7 +23,6 @@ class CNN_Extractor(nn.Module):
         half_dim = dim // 2
         num_downsample = 7
 
-
         # create stem
 
         self.stem = nn.Sequential(
@@ -97,7 +96,7 @@ with torch.no_grad():
             t.update()
     total_token = torch.concat(total_token, dim=0)
 
-torch.save(total_token, './data/pretrain/sequence_vector.pt')
+torch.save(total_token, './data/sequence_vector.pt')
 
 
 

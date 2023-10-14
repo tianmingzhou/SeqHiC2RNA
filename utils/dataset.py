@@ -50,6 +50,17 @@ class bulk_mBC_hic1d(Dataset):
     def __len__(self):
         return self.seq.shape[0]
 
+class sc_mBC(Dataset):
+    def __init__(self, ):
+        pass
+        
+
+
+def load_data_sc(path, seed, batch_size, num_workers, target_len):
+    total_sequences = read_DNAseq_tsv_enf(os.path.join(path, 'sequence_1024_200.tsv'))
+    total_expressions = read_Expre_mtx(os.path.join(path, 'expression_cov_1024_200.mtx'))
+    
+
 
 def load_data_bulk_pretrain(path, seed, batch_size, num_workers, target_len):
     total_sequences = torch.load(os.path.join(path ,'sequence_vector.pt'))
@@ -213,11 +224,3 @@ def load_data_bulk_hcf(path, seed, batch_size, num_workers, target_len):
         dataset = test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     return train_loader, valid_loader, test_loader
-
-def load_data_sc(path, seed, batch_size, num_workers, target_len):
-    total_sequences = read_DNAseq_tsv(os.path.join(path, 'sequence_1024_200.tsv'))
-    total_expressions = read_Expre_mtx(os.path.join(path, 'expression_cov_1024_200.mtx'))
-
-    
-
-

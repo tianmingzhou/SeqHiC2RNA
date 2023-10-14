@@ -214,7 +214,7 @@ if __name__=='__main__':
             sweep_id = wandb.sweep(sweep=sweep_configuration, project='enformer_pretrain')
             wandb.agent(sweep_id, function=train)
         elif args.parallelize:
-            args.model_save_path = os.path.join(args.model_save_path, 'enformer_pretrain'+str(args.num))
+            args.model_save_path = os.path.join(args.model_save_path, 'enformer_pretrain_pool_before_transformer'+str(args.num))
             wandb.agent(sweep_id=args.sweep_id, function=train)
     else:
         train()
