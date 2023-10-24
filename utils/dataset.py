@@ -65,11 +65,14 @@ class sc_mBC(Dataset):
         hic_1d = torch.tensor(self.hic_1d[index])
 
         return seq, exp.float(), hic_1d.float()
+
+    def __len__(self):
+        return self.exp.shape[0]
         
 
 
-def load_data_sc(path, seed, batch_size, num_workers, target_len):
-    total_sequences = read_DNAseq_tsv_enf(os.path.join(path, 'sequence_1024_200.tsv'))
+def load_data_sc(path, pretrain_vec_path, seed, batch_size, num_workers, target_len):
+    total_sequences = torch.load(os.path.join(pretrain_vec_path ,'sequence_vector.pt'))
     total_expressions = read_Expre_mtx(os.path.join(path, 'expression_cov_1024_200.mtx')).X.toarray()
     total_ab_score = read_1D_HiC(os.path.join(path, '1d-score-10kb-ab_1024_200.pkl')).reshape(-1, 400, 1)
     total_ins_score_25 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw25_1024_200.pkl')).reshape(-1, 400, 1)

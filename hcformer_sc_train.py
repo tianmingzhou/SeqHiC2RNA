@@ -46,6 +46,7 @@ def train():
 
     train_loader, valid_loader, test_loader = load_data_sc(
         path = args.data_path, 
+        pretrain_vec_path=args.pretrain_vec_path,
         seed = args.seed, 
         batch_size = args.batch_size, 
         num_workers = args.num_workers, 

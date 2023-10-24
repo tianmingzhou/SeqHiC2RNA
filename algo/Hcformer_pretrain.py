@@ -89,17 +89,7 @@ class Hcformer(PreTrainedModel):
             GELU()
         )
 
-        # create trunk sequential module
-
-        self.seq_conv = nn.Sequential(
-            Rearrange('b n d -> b d n'),
-            self.stem,
-            self.conv_tower,
-            Rearrange('b d n -> b n d'),        
-        )
-
         self._trunk = nn.Sequential(
-            self.pool,
             self.transformer,
             self.crop_final,
             self.final_pointwise
@@ -152,6 +142,7 @@ class Hcformer(PreTrainedModel):
     ):
 
         hic_1d = self.hic_1d_transform(hic_1d)
+        x = self.pool(x)
         x = x + hic_1d
         x = self._trunk(x)
 
