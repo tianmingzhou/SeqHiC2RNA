@@ -62,7 +62,7 @@ class sc_mBC(Dataset):
         seq_indice = self.seq_indice[index]
         seq = self.seq[seq_indice]
         exp = torch.tensor(self.exp[index])
-        hic_1d = torch.tensor(self.hic_1d[index])
+        hic_1d = self.hic_1d[index]
 
         return seq, exp.float(), hic_1d.float()
 
@@ -74,11 +74,19 @@ class sc_mBC(Dataset):
 def load_data_sc(path, pretrain_vec_path, seed, batch_size, num_workers, target_len):
     total_sequences = torch.load(os.path.join(pretrain_vec_path ,'sequence_vector.pt'))
     total_expressions = read_Expre_mtx(os.path.join(path, 'expression_cov_1024_200.mtx')).X.toarray()
-    total_ab_score = read_1D_HiC(os.path.join(path, '1d-score-10kb-ab_1024_200.pkl')).reshape(-1, 400, 1)
-    total_ins_score_25 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw25_1024_200.pkl')).reshape(-1, 400, 1)
-    total_ins_score_50 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw50_1024_200.pkl')).reshape(-1, 400, 1)
-    total_ins_score_100 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw100_1024_200.pkl')).reshape(-1, 400, 1)
-    total_genebody = read_1D_HiC(os.path.join(path, '1d-score-10kb-genebody_1024_200.pkl')).reshape(-1, 400, 1)
+    total_ab_score = read_1D_HiC(os.path.join(path, '1d-score-10kb-ab_1024_200.pkl')).astype(np.float32).reshape(-1, 400, 1)
+    total_ins_score_25 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw25_1024_200.pkl')).astype(np.float32).reshape(-1, 400, 1)
+    total_ins_score_50 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw50_1024_200.pkl')).astype(np.float32).reshape(-1, 400, 1)
+    total_ins_score_100 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw100_1024_200.pkl')).astype(np.float32).reshape(-1, 400, 1)
+    total_genebody = read_1D_HiC(os.path.join(path, '1d-score-10kb-genebody_1024_200.pkl')).astype(np.float32).reshape(-1, 400, 1)
+
+    total_ab_score = torch.tensor(total_ab_score)
+    total_ins_score_25 = torch.tensor(total_ins_score_25)
+    total_ins_score_50 = torch.tensor(total_ins_score_50)
+    total_ins_score_100 = torch.tensor(total_ins_score_100)
+    total_genebody = torch.tensor(total_genebody)
+
+    total_1D_HiC = torch.concat((total_ab_score, total_ins_score_25, total_ins_score_50, total_ins_score_100, total_genebody), axis=2)
 
     # Normalize the Expression data
     row_min = np.min(total_expressions, axis=1, keepdims=True)
@@ -92,7 +100,7 @@ def load_data_sc(path, pretrain_vec_path, seed, batch_size, num_workers, target_
     total_expressions = total_expressions[:, -trim:trim]
 
     # transform the 1D HiC data
-    total_1D_HiC = np.concatenate((total_ab_score, total_ins_score_25, total_ins_score_50, total_ins_score_100, total_genebody), axis=2)
+    # total_1D_HiC = np.concatenate((total_ab_score, total_ins_score_25, total_ins_score_50, total_ins_score_100, total_genebody), axis=2)
 
     # generate random indice
     k = int(total_expressions.shape[0]/100)
