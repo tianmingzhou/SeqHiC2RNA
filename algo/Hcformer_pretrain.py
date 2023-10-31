@@ -30,6 +30,9 @@ class Hcformer(PreTrainedModel):
         twice_dim = config.dim * 2
         self.seq_dim = config.seq_dim
 
+        if config.dim != 1536:
+            self.dim_transform = nn.Linear(1536, config.dim)
+
         # hic_1d data transformation
         self.hic_1d_transform = nn.Sequential(
             nn.Linear(config.hic_1d_feat_num, config.hic_1d_feat_dim),
@@ -140,7 +143,9 @@ class Hcformer(PreTrainedModel):
         hic_1d,
         head = None,
     ):
-
+        
+        if exists(self.dim_transform):
+            x = self.dim_transform(x)
         hic_1d = self.hic_1d_transform(hic_1d)
         x = self.pool(x)
         x = x + hic_1d

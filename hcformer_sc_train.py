@@ -171,7 +171,7 @@ if __name__=='__main__':
     parser.add_argument('--heads', default=8, type=int, help='Attention Heads')
     parser.add_argument('--output_heads', default=1, type=int)
     parser.add_argument('--target_length', default=240, type=int)
-    parser.add_argument('--hic_1d_feat_num', default=1, type=int)
+    parser.add_argument('--hic_1d_feat_num', default=5, type=int)
     parser.add_argument('--hic_1d_feat_dim', default=1536, type=int)
 
     # parallelize sweep

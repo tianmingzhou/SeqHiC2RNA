@@ -71,22 +71,23 @@ class sc_mBC(Dataset):
         
 
 
-def load_data_sc(path, pretrain_vec_path, seed, batch_size, num_workers, target_len):
+def load_data_sc(path, pretrain_vec_path, seed, batch_size, num_workers, target_len, split=3):
     total_sequences = torch.load(os.path.join(pretrain_vec_path ,'sequence_vector.pt'))
     total_expressions = read_Expre_mtx(os.path.join(path, 'expression_cov_1024_200.mtx')).X.toarray()
-    total_ab_score = read_1D_HiC(os.path.join(path, '1d-score-10kb-ab_1024_200.pkl')).astype(np.float32).reshape(-1, 400, 1)
-    total_ins_score_25 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw25_1024_200.pkl')).astype(np.float32).reshape(-1, 400, 1)
-    total_ins_score_50 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw50_1024_200.pkl')).astype(np.float32).reshape(-1, 400, 1)
-    total_ins_score_100 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw100_1024_200.pkl')).astype(np.float32).reshape(-1, 400, 1)
-    total_genebody = read_1D_HiC(os.path.join(path, '1d-score-10kb-genebody_1024_200.pkl')).astype(np.float32).reshape(-1, 400, 1)
+    total_ab_score = read_1D_HiC(os.path.join(path, '1d-score-10kb-ab_1024_200_float16.pkl')).reshape(-1, 400, 1)
+    total_ins_score_25 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw25_1024_200_float16.pkl')).reshape(-1, 400, 1)
+    total_ins_score_50 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw50_1024_200_float16.pkl')).reshape(-1, 400, 1)
+    total_ins_score_100 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw100_1024_200_float16.pkl')).reshape(-1, 400, 1)
+    total_genebody = read_1D_HiC(os.path.join(path, '1d-score-10kb-genebody_1024_200_float16.pkl')).reshape(-1, 400, 1)
 
-    total_ab_score = torch.tensor(total_ab_score)
-    total_ins_score_25 = torch.tensor(total_ins_score_25)
-    total_ins_score_50 = torch.tensor(total_ins_score_50)
-    total_ins_score_100 = torch.tensor(total_ins_score_100)
-    total_genebody = torch.tensor(total_genebody)
+    total_ab_score = torch.from_numpy(total_ab_score)
+    total_ins_score_25 = torch.from_numpy(total_ins_score_25)
+    total_ins_score_50 = torch.from_numpy(total_ins_score_50)
+    total_ins_score_100 = torch.from_numpy(total_ins_score_100)
+    total_genebody = torch.from_numpy(total_genebody)
 
     total_1D_HiC = torch.concat((total_ab_score, total_ins_score_25, total_ins_score_50, total_ins_score_100, total_genebody), axis=2)
+    # total_1D_HiC = torch.concat((total_ab_score, total_ins_score_100, total_genebody), dim=2)
 
     # Normalize the Expression data
     row_min = np.min(total_expressions, axis=1, keepdims=True)
@@ -102,16 +103,23 @@ def load_data_sc(path, pretrain_vec_path, seed, batch_size, num_workers, target_
     # transform the 1D HiC data
     # total_1D_HiC = np.concatenate((total_ab_score, total_ins_score_25, total_ins_score_50, total_ins_score_100, total_genebody), axis=2)
 
-    # generate random indice
-    k = int(total_expressions.shape[0]/100)
-    indice = np.zeros((total_expressions.shape[0], 1))
-    indice[:k] = 1
-    indice[k:2*k] = 2
-    np.random.seed(seed)
-    indice = np.random.permutation(indice)
-    train_indice = np.where(indice==0)[0]
-    valid_indice = np.where(indice==2)[0]
-    test_indice = np.where(indice==1)[0]
+    # split the dataset
+    cell_indice_train = torch.arange(int(3105/split))
+    cell_indice_valid = torch.arange(int(3105/split), 3105)
+    seq_indice_train = torch.arange(int(3740/split))
+    seq_indice_valid = torch.arange(int(3740/split), 3740)
+
+    train_indice = torch.cartesian_prod(cell_indice_train, seq_indice_train)
+    train_indice = train_indice[:, 0] * 3740 + train_indice[:, 1]
+
+    valid_indice_1 = torch.cartesian_prod(cell_indice_train, seq_indice_valid)
+    valid_indice_1 = valid_indice_1[:, 0] * 3740 + valid_indice_1[:, 1]
+    valid_indice_2 = torch.cartesian_prod(cell_indice_valid, seq_indice_train)
+    valid_indice_2 = valid_indice_2[:, 0] * 3740 + valid_indice_2[:, 1]
+    valid_indice = torch.concat((valid_indice_1, valid_indice_2), dim=0)
+
+    test_indice = torch.cartesian_prod(cell_indice_valid, seq_indice_valid)
+    test_indice = test_indice[:, 0] * 3740 + test_indice[:, 1]
 
     train_seq_indice = train_indice % 3740
     valid_seq_indice = valid_indice % 3740
