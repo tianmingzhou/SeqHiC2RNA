@@ -64,7 +64,7 @@ class sc_mBC(Dataset):
         exp = torch.tensor(self.exp[index])
         hic_1d = self.hic_1d[index]
 
-        return seq.float(), exp.float(), hic_1d.float()
+        return seq.float(), exp.float(), hic_1d.float()/255
 
     def __len__(self):
         return self.exp.shape[0]
@@ -74,11 +74,11 @@ class sc_mBC(Dataset):
 def load_data_sc(path, seed, batch_size, num_workers, target_len, split=3):
     total_sequences = torch.load(os.path.join(path ,'sequence_vector.pt'))
     total_expressions = read_Expre_mtx(os.path.join(path, 'expression_cov_1024_200.mtx')).X.toarray()
-    total_ab_score = read_1D_HiC(os.path.join(path, '1d-score-10kb-ab_1024_200_uint8.pkl')).reshape(-1, 400, 1)/255
-    total_ins_score_25 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw25_1024_200_uint8.pkl')).reshape(-1, 400, 1)/255
-    total_ins_score_50 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw50_1024_200_uint8.pkl')).reshape(-1, 400, 1)/255
-    total_ins_score_100 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw100_1024_200_uint8.pkl')).reshape(-1, 400, 1)/255
-    total_genebody = read_1D_HiC(os.path.join(path, '1d-score-10kb-genebody_1024_200_uint8.pkl')).reshape(-1, 400, 1)/255
+    total_ab_score = read_1D_HiC(os.path.join(path, '1d-score-10kb-ab_1024_200_uint8.pkl')).reshape(-1, 400, 1)
+    total_ins_score_25 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw25_1024_200_uint8.pkl')).reshape(-1, 400, 1)
+    total_ins_score_50 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw50_1024_200_uint8.pkl')).reshape(-1, 400, 1)
+    total_ins_score_100 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw100_1024_200_uint8.pkl')).reshape(-1, 400, 1)
+    total_genebody = read_1D_HiC(os.path.join(path, '1d-score-10kb-genebody_1024_200_uint8.pkl')).reshape(-1, 400, 1)
 
     total_ab_score = torch.from_numpy(total_ab_score)
     total_ins_score_25 = torch.from_numpy(total_ins_score_25)
