@@ -207,9 +207,7 @@ if __name__=='__main__':
                         'values': [1e-4, 5e-5, 1e-5, 5e-6, 1e-6],
                     },
                     'depth':{
-                        'distribution': 'int_uniform',
-                        'min': 5,
-                        'max': 5,
+                        'values': [5],
                     }
                 }
             }
