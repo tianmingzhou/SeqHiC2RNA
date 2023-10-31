@@ -150,8 +150,6 @@ if __name__=='__main__':
 
     parser.add_argument('--data_path', default='./data', help='Path of the dataset')
     parser.add_argument('--out_path', default='./output', help='Path to save the output')   
-    parser.add_argument('--pretrain_vec_path', default='./data', help='Path of the pretrain vector')
-    parser.add_argument('--pretrain_path', default='./algo/pretrain', help='Path to save the pretrain parameter')
     parser.add_argument('--use_wandb', action='store_true')
     parser.add_argument('--use_sweep', action='store_true')
     parser.add_argument('--seed', default=0, type=int)
@@ -203,15 +201,15 @@ if __name__=='__main__':
                 'name': sweep_name,
                 'parameters':{
                     'lr':{
-                        'values': [1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6],
+                        'values': [5e-4, 1e-4, 5e-5],
                     },
                     'wd':{
-                        'values': [1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 1e-7],
+                        'values': [1e-4, 5e-5, 1e-5, 5e-6, 1e-6],
                     },
                     'depth':{
                         'distribution': 'int_uniform',
-                        'min': 11,
-                        'max': 11,
+                        'min': 5,
+                        'max': 5,
                     }
                 }
             }

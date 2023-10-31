@@ -64,21 +64,21 @@ class sc_mBC(Dataset):
         exp = torch.tensor(self.exp[index])
         hic_1d = self.hic_1d[index]
 
-        return seq, exp.float(), hic_1d.float()
+        return seq.float(), exp.float(), hic_1d.float()
 
     def __len__(self):
         return self.exp.shape[0]
         
 
 
-def load_data_sc(path, pretrain_vec_path, seed, batch_size, num_workers, target_len, split=3):
-    total_sequences = torch.load(os.path.join(pretrain_vec_path ,'sequence_vector.pt'))
+def load_data_sc(path, seed, batch_size, num_workers, target_len, split=3):
+    total_sequences = torch.load(os.path.join(path ,'sequence_vector.pt'))
     total_expressions = read_Expre_mtx(os.path.join(path, 'expression_cov_1024_200.mtx')).X.toarray()
-    total_ab_score = read_1D_HiC(os.path.join(path, '1d-score-10kb-ab_1024_200_float16.pkl')).reshape(-1, 400, 1)
-    total_ins_score_25 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw25_1024_200_float16.pkl')).reshape(-1, 400, 1)
-    total_ins_score_50 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw50_1024_200_float16.pkl')).reshape(-1, 400, 1)
-    total_ins_score_100 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw100_1024_200_float16.pkl')).reshape(-1, 400, 1)
-    total_genebody = read_1D_HiC(os.path.join(path, '1d-score-10kb-genebody_1024_200_float16.pkl')).reshape(-1, 400, 1)
+    total_ab_score = read_1D_HiC(os.path.join(path, '1d-score-10kb-ab_1024_200_uint8.pkl')).reshape(-1, 400, 1)/255
+    total_ins_score_25 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw25_1024_200_uint8.pkl')).reshape(-1, 400, 1)/255
+    total_ins_score_50 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw50_1024_200_uint8.pkl')).reshape(-1, 400, 1)/255
+    total_ins_score_100 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw100_1024_200_uint8.pkl')).reshape(-1, 400, 1)/255
+    total_genebody = read_1D_HiC(os.path.join(path, '1d-score-10kb-genebody_1024_200_uint8.pkl')).reshape(-1, 400, 1)/255
 
     total_ab_score = torch.from_numpy(total_ab_score)
     total_ins_score_25 = torch.from_numpy(total_ins_score_25)
@@ -104,10 +104,10 @@ def load_data_sc(path, pretrain_vec_path, seed, batch_size, num_workers, target_
     # total_1D_HiC = np.concatenate((total_ab_score, total_ins_score_25, total_ins_score_50, total_ins_score_100, total_genebody), axis=2)
 
     # split the dataset
-    cell_indice_train = torch.arange(int(3105/split))
-    cell_indice_valid = torch.arange(int(3105/split), 3105)
-    seq_indice_train = torch.arange(int(3740/split))
-    seq_indice_valid = torch.arange(int(3740/split), 3740)
+    cell_indice_train = torch.arange(int(3105/10))
+    cell_indice_valid = torch.arange(int(3105/10), 3105)
+    seq_indice_train = torch.arange(int(3740/4))
+    seq_indice_valid = torch.arange(int(3740/4), 3740)
 
     train_indice = torch.cartesian_prod(cell_indice_train, seq_indice_train)
     train_indice = train_indice[:, 0] * 3740 + train_indice[:, 1]
@@ -118,8 +118,20 @@ def load_data_sc(path, pretrain_vec_path, seed, batch_size, num_workers, target_
     valid_indice_2 = valid_indice_2[:, 0] * 3740 + valid_indice_2[:, 1]
     valid_indice = torch.concat((valid_indice_1, valid_indice_2), dim=0)
 
+    # sample validation sample
+    torch.manual_seed(seed)
+    perm = torch.randperm(valid_indice.shape[0])
+    sample_indice = perm[:int(valid_indice.shape[0]/100)]
+    valid_indice = valid_indice[sample_indice]
+
     test_indice = torch.cartesian_prod(cell_indice_valid, seq_indice_valid)
     test_indice = test_indice[:, 0] * 3740 + test_indice[:, 1]
+
+    # sample test sample
+    torch.manual_seed(seed)
+    perm = torch.randperm(test_indice.shape[0])
+    sample_indice = perm[:int(test_indice.shape[0]/200)]
+    test_indice = test_indice[sample_indice]
 
     train_seq_indice = train_indice % 3740
     valid_seq_indice = valid_indice % 3740
