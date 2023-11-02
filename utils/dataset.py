@@ -73,7 +73,7 @@ class sc_mBC(Dataset):
 
 def load_data_sc(path, seed, batch_size, num_workers, target_len, split=3):
     total_sequences = torch.load(os.path.join(path ,'sequence_vector.pt'))
-    total_expressions = read_Expre_mtx(os.path.join(path, 'expression_cov_1024_200.mtx')).X.toarray()
+    total_expressions = read_Expre_tsv(os.path.join(path, 'expression_cov_1024_200_bulk.tsv'))
     total_ab_score = read_1D_HiC(os.path.join(path, '1d-score-10kb-ab_1024_200_uint8.pkl')).reshape(-1, 400, 1)
     total_ins_score_25 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw25_1024_200_uint8.pkl')).reshape(-1, 400, 1)
     total_ins_score_50 = read_1D_HiC(os.path.join(path, '1d-score-10kb-is-hw50_1024_200_uint8.pkl')).reshape(-1, 400, 1)
@@ -94,14 +94,13 @@ def load_data_sc(path, seed, batch_size, num_workers, target_len, split=3):
     row_max = np.max(total_expressions, axis=1, keepdims=True)
     total_expressions = (total_expressions - row_min) / (row_max - row_min)
     total_expressions = np.log1p(total_expressions * 1e4)
-    total_expressions = total_expressions.reshape(-1, 400)
 
     # crop the DNA-sequence from two sides
     trim = (target_len - total_expressions.shape[1]) // 2
     total_expressions = total_expressions[:, -trim:trim]
 
-    # transform the 1D HiC data
-    # total_1D_HiC = np.concatenate((total_ab_score, total_ins_score_25, total_ins_score_50, total_ins_score_100, total_genebody), axis=2)
+    # repeat it to single cell level
+    total_expressions = np.tile(total_expressions, (3105, 1))
 
     # split the dataset
     cell_indice_train = torch.arange(int(3105/10))

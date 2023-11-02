@@ -148,7 +148,7 @@ class Hcformer(PreTrainedModel):
             x = self.dim_transform(x)
         hic_1d = self.hic_1d_transform(hic_1d)
         x = self.pool(x)
-        x = x + hic_1d
+        # x = x + hic_1d
         x = self._trunk(x)
 
         out = map_values(lambda fn: fn(x), self._heads)
