@@ -155,7 +155,7 @@ if __name__=='__main__':
     parser.add_argument('--batch_size', default=2, type=int)
     parser.add_argument('--num_workers', default=8, type=int)
     parser.add_argument('--lr', default=1e-4, type=float, help='Learning Rate')
-    parser.add_argument('--wd', default=0.0, help='L2 Regularization for Optimizer')
+    parser.add_argument('--wd', default=0.0, type=float, help='L2 Regularization for Optimizer')
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--gpu', type=int, default='0', help='Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0')
     parser.add_argument('--num', type=int, default=0, help='To distinguish different sweep')
