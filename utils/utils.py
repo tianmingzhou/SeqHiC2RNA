@@ -54,3 +54,12 @@ def read_1D_HiC(path):
     with open(path, 'rb') as f:
         data = pickle.load(f)
     return data
+
+def read_pbulk_exp(path):
+    with open(path, 'rb') as f:
+        data = pickle.load(f).squeeze()
+    for i in range(len(data)):
+        data[i] = data[i].toarray()
+    data = np.concatenate(data, axis=0)
+    return data
+    
