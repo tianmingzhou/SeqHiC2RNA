@@ -206,7 +206,7 @@ if __name__=='__main__':
                         'values': [1e-4, 5e-5, 1e-5, 5e-6, 1e-6],
                     },
                     'depth':{
-                        'values': [5],
+                        'values': [11],
                     }
                 }
             }
