@@ -37,8 +37,8 @@ class Hcformer(PreTrainedModel):
 
         # hic_1d data transformation
         self.hic_1d_transform = nn.Sequential(
-            nn.LayerNorm(config.hic_1d_feat_num),
             nn.Linear(config.hic_1d_feat_num, config.hic_1d_feat_dim),
+            nn.LayerNorm(config.hic_1d_feat_dim),
             nn.ReLU(),
             nn.Dropout(config.dropout_rate),
             nn.Linear(config.hic_1d_feat_dim, config.hic_1d_feat_dim)
