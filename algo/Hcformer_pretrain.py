@@ -30,11 +30,14 @@ class Hcformer(PreTrainedModel):
         twice_dim = config.dim * 2
         self.seq_dim = config.seq_dim
 
-        if config.dim != 1536:
-            self.dim_transform = nn.Linear(1536, config.dim)
+        self.dim_transform = nn.Sequential(
+            nn.LayerNorm(1536),
+            nn.Linear(1536, config.dim)
+        )
 
         # hic_1d data transformation
         self.hic_1d_transform = nn.Sequential(
+            nn.LayerNorm(config.hic_1d_feat_num),
             nn.Linear(config.hic_1d_feat_num, config.hic_1d_feat_dim),
             nn.ReLU(),
             nn.Dropout(config.dropout_rate),
