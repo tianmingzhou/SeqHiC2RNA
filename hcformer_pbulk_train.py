@@ -78,24 +78,51 @@ def train():
         with tqdm(total=len(train_loader), dynamic_ncols=True) as t:
             t.set_description(f'Epoch: {epoch+1}/{args.epochs}')
             for seq, exp, hic_1d in train_loader:
-                seq, exp, hic_1d = seq.to(args.device), exp.to(args.device), hic_1d.to(args.device)
-                pred = model(seq, head='human', hic_1d=hic_1d)
+                # seq, exp, hic_1d = seq.to(args.device), exp.to(args.device), hic_1d.to(args.device)
+                # pred = model(seq, head='human', hic_1d=hic_1d)
 
-                # compute loss and metric
-                tr_loss = poisson_loss(pred, exp.unsqueeze(-1))
-                train_loss.append(tr_loss.item())
+                # # compute loss and metric
+                # tr_loss = poisson_loss(pred, exp.unsqueeze(-1))
+                # train_loss.append(tr_loss.item())
 
-                train_pred.append(pred.detach().cpu())
+                # train_pred.append(pred.detach().cpu())
+                # train_exp.append(exp.unsqueeze(-1).detach().cpu())
+
+                # # backward
+                # optimizer.zero_grad()
+                # tr_loss.backward()
+                # optimizer.step()
+
+                # t.update()
+                # t.set_postfix({
+                #     'train_loss': f'{tr_loss.item():.4f}',
+                # })
+
+                optimizer.zero_grad()
+                half_bs = seq.shape[0]//2
+                seq1, exp1, hic_1d1 = seq[:half_bs].to(args.device), exp[:half_bs].to(args.device), hic_1d[:half_bs].to(args.device) 
+                pred1 = model(seq1, head='human', hic_1d=hic_1d1)
+                tr_loss1 = poisson_loss(pred1, exp1.unsqueeze(-1))/2
+                train_loss1 = tr_loss1.item()
+                train_pred1 = pred1.detach().cpu()
+                tr_loss1.backward()
+
+                seq2, exp2, hic_1d2 = seq[half_bs:2*half_bs].to(args.device), exp[half_bs:2*half_bs].to(args.device), hic_1d[half_bs:2*half_bs].to(args.device) 
+                pred2 = model(seq2, head='human', hic_1d=hic_1d2)
+                tr_loss2 = poisson_loss(pred2, exp2.unsqueeze(-1))/2
+                train_loss2 = tr_loss2.item()
+                train_pred2 = pred2.detach().cpu()
+                tr_loss2.backward()
+
+                train_loss.append(train_loss1+train_loss2)
+                train_pred.append(torch.concat((train_pred1, train_pred2), dim=0))
                 train_exp.append(exp.unsqueeze(-1).detach().cpu())
 
-                # backward
-                optimizer.zero_grad()
-                tr_loss.backward()
                 optimizer.step()
 
                 t.update()
                 t.set_postfix({
-                    'train_loss': f'{tr_loss.item():.4f}',
+                    'train_loss': f'{train_loss1+train_loss2:.4f}',
                 })
         train_loss = np.mean(train_loss)
         train_pred = torch.concat(train_pred, dim=0)
