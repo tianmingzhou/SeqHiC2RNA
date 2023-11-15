@@ -199,10 +199,18 @@ class Attention(nn.Module):
         super().__init__()
         self.scale = dim_key ** -0.5
         self.heads = heads
+        self.dim_key = dim_key
+        self.dim_value = dim_value
 
+        self.do_transpose = 2
+
+        # --
         self.to_q = nn.Linear(dim, dim_key * heads, bias = False)
         self.to_k = nn.Linear(dim, dim_key * heads, bias = False)
         self.to_v = nn.Linear(dim, dim_value * heads, bias = False)
+        # --
+        # self.to_qkv = nn.Linear(dim, (dim_key + dim_key + dim_value) * heads, bias=False)
+        # --
 
         self.to_out = nn.Linear(dim_value * heads, dim)
         nn.init.zeros_(self.to_out.weight)
@@ -213,8 +221,12 @@ class Attention(nn.Module):
         self.num_rel_pos_features = num_rel_pos_features
 
         self.to_rel_k = nn.Linear(num_rel_pos_features, dim_key * heads, bias = False)
-        self.rel_content_bias = nn.Parameter(torch.randn(1, heads, 1, dim_key))
-        self.rel_pos_bias = nn.Parameter(torch.randn(1, heads, 1, dim_key))
+        if self.do_transpose == 0:
+            self.rel_content_bias = nn.Parameter(torch.randn(1, heads, 1, dim_key))
+            self.rel_pos_bias = nn.Parameter(torch.randn(1, heads, 1, dim_key))
+        else:
+            self.rel_content_bias = nn.Parameter(torch.randn(heads, dim_key))
+            self.rel_pos_bias = nn.Parameter(torch.randn(heads, dim_key))
 
         # dropouts
 
@@ -222,30 +234,95 @@ class Attention(nn.Module):
         self.attn_dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        n, h, device = x.shape[-2], self.heads, x.device
+        n, h, d, device = x.shape[-2], self.heads, self.dim_key, x.device
 
+        # --
         q = self.to_q(x)
         k = self.to_k(x)
         v = self.to_v(x)
+        # --
+        # qkv = self.to_qkv(x)
+        # q = qkv[..., :self.dim_key*self.heads]
+        # k = qkv[..., self.dim_key*self.heads:self.dim_key*self.heads*2]
+        # v = qkv[..., self.dim_key*self.heads*2:]
+        # --
 
-        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = h), (q, k, v))
+        if self.do_transpose == 0:
+            q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = h), (q, k, v))
+        else:
+            q, k, v = map(lambda t: t.reshape(*t.shape[:2], h, -1), (q, k, v))
 
         q = q * self.scale
 
-        content_logits = einsum('b h i d, b h j d -> b h i j', q + self.rel_content_bias, k)
+        if self.do_transpose == 0:
+            # --
+            content_logits = einsum('b h i d, b h j d -> b h i j', q + self.rel_content_bias, k)
+            # --
+            # content_logits = (q + self.rel_content_bias) @ k.transpose(-1, -2)
+            # --
+        elif self.do_transpose == 1:
+            content_logits = einsum('b i h d, b j h d -> b h i j', q + self.rel_content_bias, k)
+        elif self.do_transpose == 2:
+            content_logits = einsum('b i h d, b j h d -> b i j h', q + self.rel_content_bias, k)
+        else:
+            raise NotImplementedError
 
         positions = get_positional_embed(n, self.num_rel_pos_features, device)
         positions = self.pos_dropout(positions)
         rel_k = self.to_rel_k(positions)
 
-        rel_k = rearrange(rel_k, 'n (h d) -> h n d', h = h)
-        rel_logits = einsum('b h i d, h j d -> b h i j', q + self.rel_pos_bias, rel_k)
-        rel_logits = relative_shift(rel_logits)
+        if self.do_transpose == 0:
+            # --
+            rel_k = rearrange(rel_k, 'n (h d) -> h n d', h = h)
+            rel_logits = einsum('b h i d, h j d -> b h i j', q + self.rel_pos_bias, rel_k)
+            # --
+            # rel_k = rearrange(rel_k, 'j (h d) -> h d j', h = h)
+            # rel_logits = (q + self.rel_pos_bias) @ rel_k
+            # --
+            # rel_k = rearrange(rel_k, 'j (h d) -> j h d', h = h)
+            # rel_logits = einsum('b h i d, j h d -> b h i j', q + self.rel_pos_bias, rel_k)
+            # --
+            rel_logits = relative_shift(rel_logits)
+        elif self.do_transpose == 1:
+            rel_k = rel_k.reshape(rel_k.shape[0], h, d)
+            rel_logits = einsum('b i h d, j h d -> b h i j', q + self.rel_pos_bias, rel_k)
+            rel_logits = relative_shift(rel_logits)
+        elif self.do_transpose == 2:
+            rel_k = rel_k.reshape(rel_k.shape[0], h, d)
+            rel_logits = einsum('b i h d, j h d -> b i j h', q + self.rel_pos_bias, rel_k)
+
+            to_pad = torch.zeros_like(rel_logits[..., :1, :])
+            rel_logits = torch.cat((to_pad, rel_logits), dim=-2)
+            _, t1, t2, _ = rel_logits.shape
+            rel_logits = rel_logits.reshape(-1, t2, t1, h)
+            rel_logits = rel_logits[:, 1:, :, :]
+            rel_logits = rel_logits.reshape(-1, t1, t2 - 1, h)
+            rel_logits = rel_logits[..., :((t2 + 1) // 2), :]
+        else:
+            raise NotImplementedError
 
         logits = content_logits + rel_logits
-        attn = logits.softmax(dim = -1)
+        if self.do_transpose in [0, 1]:
+            attn = logits.softmax(dim = -1)
+        elif self.do_transpose == 2:
+            attn = logits.softmax(dim = -2)
+        else:
+            raise NotImplementedError
         attn = self.attn_dropout(attn)
 
-        out = einsum('b h i j, b h j d -> b h i d', attn, v)
-        out = rearrange(out, 'b h n d -> b n (h d)')
+        if self.do_transpose == 0:
+            # --
+            out = einsum('b h i j, b h j d -> b h i d', attn, v)
+            # --
+            # out = attn @ v
+            # --
+            out = rearrange(out, 'b h n d -> b n (h d)')
+        elif self.do_transpose == 1:
+            out = einsum('b h i j, b j h d -> b i h d', attn, v)
+            out = out.reshape(*out.shape[:2], -1)
+        elif self.do_transpose == 2:
+            out = einsum('b i j h, b j h d -> b i h d', attn, v)
+            out = out.reshape(*out.shape[:2], -1)
+        else:
+            raise NotImplementedError
         return self.to_out(out)
