@@ -12,6 +12,7 @@ from utils.dataset import load_data_sc
 from algo.Hcformer_pretrain import Hcformer
 from algo.module import pearson_corr_coef, poisson_loss
 from tqdm import tqdm
+from torch import nn
 
 
 def evaluation(model, data_loader, device):
@@ -62,7 +63,8 @@ def train():
         hic_1d_feat_num = args.hic_1d_feat_num,       
         hic_1d_feat_dim = args.dim,
     ).to(args.device)
-
+    if len(args.gpu) > 1:
+        model = nn.DataParallel(model, device_ids=args.gpu)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
 
     # start training
@@ -157,7 +159,7 @@ if __name__=='__main__':
     parser.add_argument('--lr', default=1e-4, type=float, help='Learning Rate')
     parser.add_argument('--wd', default=0.0, type=float, help='L2 Regularization for Optimizer')
     parser.add_argument('--epochs', default=100, type=int)
-    parser.add_argument('--gpu', type=int, default='0', help='Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0')
+    parser.add_argument('--gpu', nargs='*', type=int, default='0', help='Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0')
     parser.add_argument('--num', type=int, default=0, help='To distinguish different sweep')
     parser.add_argument('--early_stop', default=10, type=int, help='Patience for early stop.')
 
@@ -179,8 +181,12 @@ if __name__=='__main__':
     print(args)
 
     # prepare the device
-    device = torch.device(f"cuda:{args.gpu}" if (torch.cuda.is_available() and args.gpu >= 0) else "cpu")
-    print(f"Device is {device}.")
+    if len(args.gpu) > 0:
+        device = torch.device(f"cuda:{args.gpu[0]}")
+        print(f"Device is {args.gpu}")
+    else:
+        device = torch.device(f"cuda:{args.gpu}" if (torch.cuda.is_available() and args.gpu >= 0) else "cpu")
+        print(f"Device is {device}.")
     args.device = device
     
     # prepare the output
@@ -200,13 +206,13 @@ if __name__=='__main__':
                 'name': sweep_name,
                 'parameters':{
                     'lr':{
-                        'values': [5e-4, 1e-4, 5e-5],
+                        'values': [5e-4, 1e-4, 5e-5, 1e-5],
                     },
                     'wd':{
                         'values': [1e-4, 5e-5, 1e-5, 5e-6, 1e-6],
                     },
                     'depth':{
-                        'values': [5],
+                        'values': [11],
                     }
                 }
             }
