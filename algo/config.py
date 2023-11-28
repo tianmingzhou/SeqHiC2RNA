@@ -59,8 +59,10 @@ class HcformerConfig(PretrainedConfig):
         num_downsamples = 7,    # genetic sequence is downsampled 2 ** 7 == 128x in default Enformer - can be changed for higher resolution
         dim_divisible_by = 128,
         use_tf_gamma = False,
+        hic_1d = False,
         hic_1d_feat_num = 5,
         hic_1d_feat_dim = 768,
+        hic_2d = False,
         **kwargs,
     ):
         self.dim = dim
@@ -77,7 +79,9 @@ class HcformerConfig(PretrainedConfig):
         self.num_downsamples = num_downsamples
         self.dim_divisible_by = dim_divisible_by
         self.use_tf_gamma = use_tf_gamma
+        self.hic_1d = hic_1d
         self.hic_1d_feat_num = hic_1d_feat_num
         self.hic_1d_feat_dim = hic_1d_feat_dim
+        self.hic_2d = hic_2d
 
         super().__init__(**kwargs)

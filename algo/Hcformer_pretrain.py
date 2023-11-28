@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch.utils.checkpoint import checkpoint_sequential
+import torchvision.transforms as transforms
 import sys
 sys.path.append('..')
 
@@ -9,10 +10,8 @@ from einops.layers.torch import Rearrange
 
 from transformers import PreTrainedModel
 
-from algo.module import Residual, AttentionPool, Attention, TargetLengthCrop, GELU
-from algo.module import ConvBlock, exponential_linspace_int, map_values, exists
-
-from utils.data import str_to_one_hot, seq_indices_to_one_hot
+from algo.module import Residual, AttentionPool, Attention, Hic_Attention, TargetLengthCrop, GELU
+from algo.module import ConvBlock, map_values, exists
 
 from algo.config import HcformerConfig
 
@@ -29,47 +28,83 @@ class Hcformer(PreTrainedModel):
         self.dim = config.dim
         twice_dim = config.dim * 2
         self.seq_dim = config.seq_dim
+        self.hic_1d = config.hic_1d
+        self.hic_2d = config.hic_2d
 
         self.dim_transform = nn.Sequential(
             nn.LayerNorm(1536),
             nn.Linear(1536, config.dim)
         )
 
-        # hic_1d data transformation
-        self.hic_1d_transform = nn.Sequential(
-            nn.Linear(config.hic_1d_feat_num, config.hic_1d_feat_dim),
-            nn.LayerNorm(config.hic_1d_feat_dim),
-            nn.ReLU(),
-            nn.Dropout(config.dropout_rate),
-            nn.Linear(config.hic_1d_feat_dim, config.hic_1d_feat_dim)
-        )
+        if config.hic_1d:
+            # hic_1d data transformation
+            self.hic_1d_transform = nn.Sequential(
+                nn.Linear(config.hic_1d_feat_num, config.hic_1d_feat_dim),
+                nn.LayerNorm(config.hic_1d_feat_dim),
+                nn.ReLU(),
+                nn.Dropout(config.dropout_rate),
+                nn.Linear(config.hic_1d_feat_dim, config.hic_1d_feat_dim)
+            )
+
+        if config.hic_2d:
+            self.Gaussianblur = transforms.GaussianBlur(kernel_size=5, sigma=1.5)
+            self.hic_2d_CNN = nn.Sequential(
+                nn.Conv2d(2, 32, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.Conv2d(32, 64, kernel_size=7, padding=3),
+                nn.ReLU(),
+                nn.Conv2d(64, config.heads, kernel_size=3, padding=1),
+            )
 
         # transformer
         transformer = []
-        for _ in range(config.depth):
-            transformer.append(nn.Sequential(
-                Residual(nn.Sequential(
-                    nn.LayerNorm(config.dim),
-                    Attention(
+        for i in range(config.depth):
+            if i == 0:
+                self.pre_trans = Residual(
+                    Hic_Attention(
                         config.dim,
                         heads = config.heads,
                         dim_key = config.attn_dim_key,
                         dim_value = config.dim // config.heads,
                         dropout = config.attn_dropout,
                         pos_dropout = config.pos_dropout,
-                        num_rel_pos_features = config.dim // config.heads
+                        num_rel_pos_features = config.dim // config.heads,
+                        hic_2d = config.hic_2d
                     ),
-                    nn.Dropout(config.dropout_rate)
-                )),
-                Residual(nn.Sequential(
-                    nn.LayerNorm(config.dim),
-                    nn.Linear(config.dim, config.dim * 2),
-                    nn.Dropout(config.dropout_rate),
-                    nn.ReLU(),
-                    nn.Linear(config.dim * 2, config.dim),
-                    nn.Dropout(config.dropout_rate)
+                )
+                transformer.append(
+                    Residual(nn.Sequential(
+                        nn.LayerNorm(config.dim),
+                        nn.Linear(config.dim, config.dim * 2),
+                        nn.Dropout(config.dropout_rate),
+                        nn.ReLU(),
+                        nn.Linear(config.dim * 2, config.dim),
+                        nn.Dropout(config.dropout_rate)
+                    )))
+            else:
+                transformer.append(nn.Sequential(
+                    Residual(nn.Sequential(
+                        nn.LayerNorm(config.dim),
+                        Attention(
+                            config.dim,
+                            heads = config.heads,
+                            dim_key = config.attn_dim_key,
+                            dim_value = config.dim // config.heads,
+                            dropout = config.attn_dropout,
+                            pos_dropout = config.pos_dropout,
+                            num_rel_pos_features = config.dim // config.heads,
+                        ),
+                        nn.Dropout(config.dropout_rate)
+                    )),
+                    Residual(nn.Sequential(
+                        nn.LayerNorm(config.dim),
+                        nn.Linear(config.dim, config.dim * 2),
+                        nn.Dropout(config.dropout_rate),
+                        nn.ReLU(),
+                        nn.Linear(config.dim * 2, config.dim),
+                        nn.Dropout(config.dropout_rate)
+                    ))
                 ))
-            ))
 
         self.transformer = nn.Sequential(*transformer)
 
@@ -143,15 +178,26 @@ class Hcformer(PreTrainedModel):
     def forward(
         self,
         x,
-        hic_1d,
+        hic_1d = None,
+        hic_2d = None,
         head = None,
     ):
         
         if exists(self.dim_transform):
             x = self.dim_transform(x)
-        hic_1d = self.hic_1d_transform(hic_1d)
+    
         x = self.pool(x)
-        x = x + hic_1d
+
+        if self.hic_2d:
+            x_oprod = rearrange(torch.matmul(x, x.transpose(1, 2)).unsqueeze(-1), 'b h w c -> b c h w') / 256
+            hic_2d = self.Gaussianblur(rearrange(hic_2d.unsqueeze(-1), 'b h w c -> b c h w'))
+            hic_2d = torch.concat((hic_2d, x_oprod), dim=1)
+            hic_attn = self.hic_2d_CNN(hic_2d)
+        if self.hic_1d:
+            hic_1d = self.hic_1d_transform(hic_1d)
+            x = x + hic_1d
+
+        x = self.pre_trans(x, hic_2d=hic_attn)
         x = self._trunk(x)
 
         out = map_values(lambda fn: fn(x), self._heads)

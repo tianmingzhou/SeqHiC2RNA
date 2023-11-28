@@ -1,10 +1,12 @@
 import os
-from typing import Any
 import torch
 import numpy as np
+import pickle
 
 from torch.utils.data import Dataset, DataLoader
-from utils.utils import read_DNAseq_tsv, read_Expre_tsv, read_Expre_mtx, read_1D_HiC, read_DNAseq_tsv_enf, read_pbulk_exp
+from utils.utils import read_DNAseq_tsv, read_Expre_tsv, read_Expre_mtx, read_1D_HiC, read_pbulk_exp, hic_h5_coo
+
+from scipy.sparse import coo_matrix
 
 class bulk_mBC(Dataset):
     def __init__(self, seq, exp):
@@ -69,22 +71,78 @@ class sc_mBC(Dataset):
     def __len__(self):
         return self.exp.shape[0]
 
-def load_data_pbulk(path, seed, batch_size, num_workers, target_len):
+class pbulk_mBC(Dataset):
+    def __init__(self, seq, seq_indice, exp, hic_1d, hic_2d):
+        self.seq = seq
+        self.seq_indice = seq_indice
+        self.exp = exp
+        self.hic_1d = hic_1d
+        self.hic_2d = hic_2d
+    def __getitem__(self, index):
+        seq_indice = self.seq_indice[index]
+        seq = self.seq[seq_indice]
+        exp = torch.tensor(self.exp[index])
+        if self.hic_1d != None and self.hic_2d != None:
+            hic_1d = self.hic_1d[index]
+            hic_2d = self.hic_2d[index]
+            return seq.float(), exp.float(), hic_1d.float()/255, hic_2d
+        elif self.hic_1d != None:
+            hic_1d = self.hic_1d[index]
+            return seq.float(), exp.float(), hic_1d.float()/255
+        elif self.hic_2d != None:
+            hic_2d = self.hic_2d[index]
+            return seq.float(), exp.float(), hic_2d
+    def __len__(self):
+        return self.exp.shape[0]
+
+def collate_fn_pbulk(has_hic_1d, has_hic_2d):
+    def collate_fn(batch):
+        if has_hic_1d and has_hic_2d:
+            seq, exp, hic_1d, hic_2d = map(list, zip(*batch))
+            seq = torch.stack(seq, dim=0)
+            exp = torch.stack(exp, dim=0)
+            hic_1d = torch.stack(hic_1d, dim=0)
+            return seq, exp, hic_1d, hic_2d
+        elif has_hic_1d:
+            seq, exp, hic_1d = map(list, zip(*batch))
+            seq = torch.stack(seq, dim=0)
+            exp = torch.stack(exp, dim=0)
+            hic_1d = torch.stack(hic_1d, dim=0)
+            return seq, exp, hic_1d
+        elif has_hic_2d:
+            seq, exp, hic_2d = map(list, zip(*batch))
+            seq = torch.stack(seq, dim=0)
+            exp = torch.stack(exp, dim=0)
+            return seq, exp, hic_2d
+    return collate_fn
+
+def load_data_pbulk(path, seed, batch_size, num_workers, target_len, hic_1d, hic_2d):
     total_sequences = torch.load(os.path.join(path ,'sequence_vector.pt'))
     total_expressions = read_pbulk_exp(os.path.join(path, 'expression_cov_1024_200_celltypebulk.pkl'))
-    total_ab_score = read_1D_HiC(os.path.join(path, '1d-score-celltypebulk-10kb-ab_1024_200_uint8.pkl')).reshape(-1, 400, 1)
-    total_ins_score_25 = read_1D_HiC(os.path.join(path, '1d-score-celltypebulk-10kb-is-hw25_1024_200_uint8.pkl')).reshape(-1, 400, 1)
-    total_ins_score_50 = read_1D_HiC(os.path.join(path, '1d-score-celltypebulk-10kb-is-hw50_1024_200_uint8.pkl')).reshape(-1, 400, 1)
-    total_ins_score_100 = read_1D_HiC(os.path.join(path, '1d-score-celltypebulk-10kb-is-hw100_1024_200_uint8.pkl')).reshape(-1, 400, 1)
-    total_genebody = read_1D_HiC(os.path.join(path, '1d-score-celltypebulk-10kb-genebody_1024_200_uint8.pkl')).reshape(-1, 400, 1)
+    if hic_1d:
+        total_ab_score = read_1D_HiC(os.path.join(path, '1d-score-celltypebulk-10kb-ab_1024_200_uint8.pkl')).reshape(-1, 400, 1)
+        total_ins_score_25 = read_1D_HiC(os.path.join(path, '1d-score-celltypebulk-10kb-is-hw25_1024_200_uint8.pkl')).reshape(-1, 400, 1)
+        total_ins_score_50 = read_1D_HiC(os.path.join(path, '1d-score-celltypebulk-10kb-is-hw50_1024_200_uint8.pkl')).reshape(-1, 400, 1)
+        total_ins_score_100 = read_1D_HiC(os.path.join(path, '1d-score-celltypebulk-10kb-is-hw100_1024_200_uint8.pkl')).reshape(-1, 400, 1)
+        total_genebody = read_1D_HiC(os.path.join(path, '1d-score-celltypebulk-10kb-genebody_1024_200_uint8.pkl')).reshape(-1, 400, 1)
 
-    total_ab_score = torch.from_numpy(total_ab_score)
-    total_ins_score_25 = torch.from_numpy(total_ins_score_25)
-    total_ins_score_50 = torch.from_numpy(total_ins_score_50)
-    total_ins_score_100 = torch.from_numpy(total_ins_score_100)
-    total_genebody = torch.from_numpy(total_genebody)
+        total_ab_score = torch.from_numpy(total_ab_score)
+        total_ins_score_25 = torch.from_numpy(total_ins_score_25)
+        total_ins_score_50 = torch.from_numpy(total_ins_score_50)
+        total_ins_score_100 = torch.from_numpy(total_ins_score_100)
+        total_genebody = torch.from_numpy(total_genebody)
 
-    total_1D_HiC = torch.concat((total_ab_score, total_ins_score_25, total_ins_score_50, total_ins_score_100, total_genebody), axis=2)
+        total_1D_HiC = torch.concat((total_ab_score, total_ins_score_25, total_ins_score_50, total_ins_score_100, total_genebody), axis=2)
+    if hic_2d:
+        if os.path.exists(os.path.join(path, 'contact_1024_200_celltypebulk.pkl')):
+            print('Read the contact map pickle')
+            with open(os.path.join(path, 'contact_1024_200_celltypebulk.pkl'), 'rb') as f:
+                total_2D_HiC = pickle.load(f)
+        else:
+            print('Generate the contact map pickle the first time')
+            total_2D_HiC = hic_h5_coo(os.path.join(path, 'contact_1024_200_celltypebulk.h5'))
+            with open(os.path.join(path, 'contact_1024_200_celltypebulk.pkl'), 'wb') as f:
+                pickle.dump(total_2D_HiC, f)
 
     # Normalize the Expression data
     row_min = np.min(total_expressions, axis=1, keepdims=True)
@@ -124,24 +182,35 @@ def load_data_pbulk(path, seed, batch_size, num_workers, target_len):
 
     # split the data
     train_exp = total_expressions[train_indice]
-    train_1d_hic = total_1D_HiC[train_indice]
-
     valid_exp = total_expressions[valid_indice]
-    valid_1d_hic = total_1D_HiC[valid_indice]
-
     test_exp = total_expressions[test_indice]
-    test_1d_hic = total_1D_HiC[test_indice]
 
-    train_dataset = sc_mBC(total_sequences, train_seq_indice, train_exp, train_1d_hic)
-    valid_dataset = sc_mBC(total_sequences, valid_seq_indice, valid_exp, valid_1d_hic)
-    test_dataset = sc_mBC(total_sequences, test_seq_indice, test_exp, test_1d_hic)
+    train_1d_hic = None
+    valid_1d_hic = None
+    test_1d_hic = None 
+    train_2d_hic = None
+    valid_2d_hic = None
+    test_2d_hic = None
+
+    if hic_1d:
+        train_1d_hic = total_1D_HiC[train_indice]
+        valid_1d_hic = total_1D_HiC[valid_indice]
+        test_1d_hic = total_1D_HiC[test_indice]
+    if hic_2d:
+        train_2d_hic = [total_2D_HiC[i] for i in train_indice]
+        valid_2d_hic = [total_2D_HiC[i] for i in valid_indice]
+        test_2d_hic = [total_2D_HiC[i] for i in test_indice]
+
+    train_dataset = pbulk_mBC(total_sequences, train_seq_indice, train_exp, train_1d_hic, train_2d_hic)
+    valid_dataset = pbulk_mBC(total_sequences, valid_seq_indice, valid_exp, valid_1d_hic, valid_2d_hic)
+    test_dataset = pbulk_mBC(total_sequences, test_seq_indice, test_exp, test_1d_hic, test_2d_hic)
 
     train_loader = DataLoader(
-        dataset = train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+        dataset = train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, collate_fn=collate_fn_pbulk(hic_1d, hic_2d))
     valid_loader = DataLoader(
-        dataset = valid_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+        dataset = valid_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_fn_pbulk(hic_1d, hic_2d))
     test_loader = DataLoader(
-        dataset = test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+        dataset = test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_fn_pbulk(hic_1d, hic_2d))
 
     return train_loader, valid_loader, test_loader
         

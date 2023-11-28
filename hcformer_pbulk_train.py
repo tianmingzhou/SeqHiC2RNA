@@ -13,7 +13,17 @@ from algo.Hcformer_pretrain import Hcformer
 from algo.module import pearson_corr_coef, poisson_loss
 from tqdm import tqdm
 from torch import nn
+from typing import List
+from scipy.sparse import coo_matrix
 
+def sparse_to_torch(coo_matrix: List[coo_matrix]):
+    dense_matrix = []
+    for m in coo_matrix:
+        m = m.toarray()
+        m = m + m.T
+        m /= torch.ones(400) + torch.eye(400)
+        dense_matrix.append(m)
+    return torch.stack(dense_matrix, dim=0)
 
 def evaluation(model, data_loader, device):
     model.eval()
@@ -50,7 +60,9 @@ def train():
         seed = args.seed, 
         batch_size = args.batch_size, 
         num_workers = args.num_workers, 
-        target_len = args.target_length)
+        target_len = args.target_length,
+        hic_1d=args.hic_1d,
+        hic_2d=args.hic_2d)
 
     model = Hcformer.from_hparams(
         dim = args.dim,
@@ -60,8 +72,10 @@ def train():
         output_heads = dict(human=args.output_heads),
         target_length = args.target_length,
         dim_divisible_by = args.dim / 12,
+        hic_1d = args.hic_1d,
         hic_1d_feat_num = args.hic_1d_feat_num,       
         hic_1d_feat_dim = args.dim,
+        hic_2d = args.hic_2d,
     ).to(args.device)
 
     if len(args.gpu) > 1:
@@ -80,9 +94,18 @@ def train():
         model.train()
         with tqdm(total=len(train_loader), dynamic_ncols=True) as t:
             t.set_description(f'Epoch: {epoch+1}/{args.epochs}')
-            for seq, exp, hic_1d in train_loader:
-                seq, exp, hic_1d = seq.to(args.device), exp.to(args.device), hic_1d.to(args.device)
-                pred = model(seq, head='human', hic_1d=hic_1d)
+            for item in train_loader:
+                if args.hic_1d and args.hic_2d:
+                    seq, exp, hic_1d, hic_2d = item[0].to(args.device), item[1].to(args.device), item[2].to(args.device), item[3]
+                    hic_2d = sparse_to_torch(hic_2d).to(args.device)
+                elif args.hic_1d:
+                    seq, exp, hic_1d = item[0].to(args.device), item[1].to(args.device), item[2].to(args.device)
+                    hic_2d = None
+                elif args.hic_2d:
+                    seq, exp, hic_2d = item[0].to(args.device), item[1].to(args.device), item[2]
+                    hic_1d = None
+                    hic_2d = sparse_to_torch(hic_2d).to(args.device)
+                pred = model(seq, head='human', hic_1d=hic_1d, hic_2d=hic_2d)
 
                 # compute loss and metric
                 tr_loss = poisson_loss(pred, exp.unsqueeze(-1))
@@ -171,8 +194,10 @@ if __name__=='__main__':
     parser.add_argument('--heads', default=8, type=int, help='Attention Heads')
     parser.add_argument('--output_heads', default=1, type=int)
     parser.add_argument('--target_length', default=240, type=int)
+    parser.add_argument('--hic_1d', action='store_true')
     parser.add_argument('--hic_1d_feat_num', default=5, type=int)
     parser.add_argument('--hic_1d_feat_dim', default=1536, type=int)
+    parser.add_argument('--hic_2d', action='store_true')
 
     # parallelize sweep
     parser.add_argument('--parallelize', action='store_true')

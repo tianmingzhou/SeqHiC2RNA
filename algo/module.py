@@ -249,3 +249,81 @@ class Attention(nn.Module):
         out = einsum('b h i j, b h j d -> b h i d', attn, v)
         out = rearrange(out, 'b h n d -> b n (h d)')
         return self.to_out(out)
+    
+class Hic_Attention(nn.Module):
+    def __init__(
+        self,
+        dim,
+        *,
+        num_rel_pos_features,
+        heads = 8,
+        dim_key = 64,
+        dim_value = 64,
+        dropout = 0.,
+        pos_dropout = 0.,
+        post_dropout = 0.,
+        hic_2d = False,
+    ):
+        super().__init__()
+        self.scale = dim_key ** -0.5
+        self.heads = heads
+        self.hic_2d = hic_2d
+
+        self.layernorm = nn.LayerNorm(dim)
+
+        self.to_q = nn.Linear(dim, dim_key * heads, bias = False)
+        self.to_k = nn.Linear(dim, dim_key * heads, bias = False)
+        self.to_v = nn.Linear(dim, dim_value * heads, bias = False)
+
+        self.to_out = nn.Linear(dim_value * heads, dim)
+        nn.init.zeros_(self.to_out.weight)
+        nn.init.zeros_(self.to_out.bias)
+
+        # relative positional encoding
+
+        self.num_rel_pos_features = num_rel_pos_features
+
+        self.to_rel_k = nn.Linear(num_rel_pos_features, dim_key * heads, bias = False)
+        self.rel_content_bias = nn.Parameter(torch.randn(1, heads, 1, dim_key))
+        self.rel_pos_bias = nn.Parameter(torch.randn(1, heads, 1, dim_key))
+
+        # dropouts
+
+        self.pos_dropout = nn.Dropout(pos_dropout)
+        self.attn_dropout = nn.Dropout(dropout)
+        self.post_dropout = nn.Dropout(post_dropout)
+
+    def forward(self, x, hic_2d=None):
+        x = self.layernorm(x)
+        n, h, device = x.shape[-2], self.heads, x.device
+
+        q = self.to_q(x)
+        k = self.to_k(x)
+        v = self.to_v(x)
+
+        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = h), (q, k, v))
+
+        q = q * self.scale
+
+        content_logits = einsum('b h i d, b h j d -> b h i j', q + self.rel_content_bias, k)
+
+        positions = get_positional_embed(n, self.num_rel_pos_features, device)
+        positions = self.pos_dropout(positions)
+        rel_k = self.to_rel_k(positions)
+
+        rel_k = rearrange(rel_k, 'n (h d) -> h n d', h = h)
+        rel_logits = einsum('b h i d, h j d -> b h i j', q + self.rel_pos_bias, rel_k)
+        rel_logits = relative_shift(rel_logits)
+
+        logits = content_logits + rel_logits
+
+        if self.hic_2d:
+            logits += hic_2d
+
+        attn = logits.softmax(dim = -1)
+        attn = self.attn_dropout(attn)
+
+        out = einsum('b h i j, b h j d -> b h i d', attn, v)
+        out = rearrange(out, 'b h n d -> b n (h d)')
+        
+        return self.post_dropout(self.to_out(out))

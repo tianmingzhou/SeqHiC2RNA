@@ -1,14 +1,16 @@
 import random
-import math
 import torch
 import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 import scanpy as sc
 import pickle
+import h5py
 
 from tqdm import tqdm
+from typing import List
 from utils.data import str_to_seq_indices
+from scipy.sparse import coo_matrix
 
 def seed_all(seed):
     random.seed(seed)
@@ -63,3 +65,21 @@ def read_pbulk_exp(path):
     data = np.concatenate(data, axis=0)
     return data
     
+def hic_h5_coo(path):
+    total_hic = []
+    with h5py.File(path, 'r') as f:
+        cell_type = list(f.keys())
+        gene_name = list(f[cell_type[0]])
+        for c_type in tqdm(cell_type, desc='Processing'):
+            type_hic = f[c_type]
+            for g_name in gene_name:
+                hic = type_hic[g_name]
+                row = hic['row']
+                col = hic['col']
+                data = hic['data']
+
+                coo_mat = coo_matrix((data, (row, col)), shape=(400, 400))
+                coo_mat.sum_duplicates()
+                coo_mat.data = np.log1p(coo_mat.data)
+                total_hic.append(coo_mat)
+    return total_hic
