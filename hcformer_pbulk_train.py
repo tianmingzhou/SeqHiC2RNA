@@ -32,9 +32,18 @@ def evaluation(model, data_loader, device):
             t.set_description('Evaluation: ')
             total_pred = []
             total_exp = []
-            for seq, exp, hic_1d in data_loader:
-                seq, hic_1d = seq.to(device), hic_1d.to(device)
-                pred = model(seq, head='human', hic_1d=hic_1d)
+            for item in data_loader:
+                if args.hic_1d and args.hic_2d:
+                    seq, exp, hic_1d, hic_2d = item[0].to(args.device), item[1].to(args.device), item[2].to(args.device), item[3]
+                    hic_2d = sparse_to_torch(hic_2d).to(args.device)
+                elif args.hic_1d:
+                    seq, exp, hic_1d = item[0].to(args.device), item[1].to(args.device), item[2].to(args.device)
+                    hic_2d = None
+                elif args.hic_2d:
+                    seq, exp, hic_2d = item[0].to(args.device), item[1].to(args.device), item[2]
+                    hic_1d = None
+                    hic_2d = sparse_to_torch(hic_2d).to(args.device)
+                pred = model(seq, head='human', hic_1d=hic_1d, hic_2d=hic_2d)
 
                 total_pred.append(pred.detach().cpu())
                 total_exp.append(exp.unsqueeze(-1))
