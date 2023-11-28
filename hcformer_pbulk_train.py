@@ -34,13 +34,13 @@ def evaluation(model, data_loader, device):
             total_exp = []
             for item in data_loader:
                 if args.hic_1d and args.hic_2d:
-                    seq, exp, hic_1d, hic_2d = item[0].to(args.device), item[1].to(args.device), item[2].to(args.device), item[3]
+                    seq, exp, hic_1d, hic_2d = item[0].to(args.device), item[1], item[2].to(args.device), item[3]
                     hic_2d = sparse_to_torch(hic_2d).to(args.device)
                 elif args.hic_1d:
-                    seq, exp, hic_1d = item[0].to(args.device), item[1].to(args.device), item[2].to(args.device)
+                    seq, exp, hic_1d = item[0].to(args.device), item[1], item[2].to(args.device)
                     hic_2d = None
                 elif args.hic_2d:
-                    seq, exp, hic_2d = item[0].to(args.device), item[1].to(args.device), item[2]
+                    seq, exp, hic_2d = item[0].to(args.device), item[1], item[2]
                     hic_1d = None
                     hic_2d = sparse_to_torch(hic_2d).to(args.device)
                 pred = model(seq, head='human', hic_1d=hic_1d, hic_2d=hic_2d)
