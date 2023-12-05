@@ -8,7 +8,7 @@ import wandb
 import shutil
 
 from utils.utils import seed_all
-from utils.dataset import load_data_pbulk
+from utils.dataset import load_data_bulk_pretrain
 from algo.Hcformer_pretrain import Hcformer
 from algo.module import pearson_corr_coef, poisson_loss
 from tqdm import tqdm
@@ -24,6 +24,7 @@ def sparse_to_torch(coo_matrix: List[coo_matrix]):
         m /= torch.ones(400) + torch.eye(400)
         dense_matrix.append(m)
     return torch.stack(dense_matrix, dim=0)
+
 
 def evaluation(model, data_loader, device):
     model.eval()
@@ -67,7 +68,7 @@ def train():
         wd = args.wd
         depth = args.depth
 
-    train_loader, valid_loader, test_loader = load_data_pbulk(
+    train_loader, valid_loader, test_loader = load_data_bulk_pretrain(
         path = args.data_path, 
         seed = args.seed, 
         batch_size = args.batch_size, 
@@ -85,7 +86,7 @@ def train():
         target_length = args.target_length,
         dim_divisible_by = args.dim / 12,
         hic_1d = args.hic_1d,
-        hic_1d_feat_num = args.hic_1d_feat_num,       
+        hic_1d_feat_num = args.hic_1d_feat_num,
         hic_1d_feat_dim = args.dim,
         hic_2d = args.hic_2d,
     ).to(args.device)
@@ -196,22 +197,22 @@ if __name__=='__main__':
     parser.add_argument('--batch_size', default=2, type=int)
     parser.add_argument('--num_workers', default=8, type=int)
     parser.add_argument('--lr', default=1e-4, type=float, help='Learning Rate')
-    parser.add_argument('--wd', default=0.0, type=float, help='L2 Regularization for Optimizer')
+    parser.add_argument('--wd', default=0.0, help='L2 Regularization for Optimizer')
     parser.add_argument('--epochs', default=100, type=int)
     parser.add_argument('--gpu', nargs='*', type=int, default='0', help='Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0')
     parser.add_argument('--num', type=int, default=0, help='To distinguish different sweep')
     parser.add_argument('--early_stop', default=10, type=int, help='Patience for early stop.')
 
     # Hcformer hyperparameters
-    parser.add_argument('--dim', default=1536, type=int)
-    parser.add_argument('--seq_dim', default=1536, type=int)
+    parser.add_argument('--dim', default=768, type=int)
+    parser.add_argument('--seq_dim', default=768, type=int)
     parser.add_argument('--depth', default=11, type=int, help='Number of transformer blocks')
     parser.add_argument('--heads', default=8, type=int, help='Attention Heads')
     parser.add_argument('--output_heads', default=1, type=int)
     parser.add_argument('--target_length', default=240, type=int)
-    parser.add_argument('--hic_1d', action='store_true')
+    parser.add_argument('--hic_1d', action='store_true')    
     parser.add_argument('--hic_1d_feat_num', default=5, type=int)
-    parser.add_argument('--hic_1d_feat_dim', default=1536, type=int)
+    parser.add_argument('--hic_1d_feat_dim', default=768, type=int)
     parser.add_argument('--hic_2d', action='store_true')
 
     # parallelize sweep
@@ -231,7 +232,7 @@ if __name__=='__main__':
     args.device = device
     
     # prepare the output
-    args.out_path = os.path.join(args.out_path, 'hcformer_pbulk')
+    args.out_path = os.path.join(args.out_path, 'hcformer_bulk')
     os.makedirs(args.out_path, exist_ok=True)
     os.makedirs(os.path.join(args.out_path, 'model'), exist_ok=True)
     args.model_save_path = os.path.join(args.out_path, 'model')
@@ -240,20 +241,22 @@ if __name__=='__main__':
 
     if args.use_wandb:
         if args.use_sweep:
-            sweep_name = 'hcformer_pbulk'+str(args.num)
+            sweep_name = 'hcformer_bulk'+str(args.num)
             sweep_configuration = {
-                'project': 'hcformer_pbulk',
+                'project': 'hcformer_bulk',
                 'method': 'random',
                 'name': sweep_name,
                 'parameters':{
                     'lr':{
-                        'values': [5e-4, 1e-4, 5e-5],
+                        'values': [1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6],
                     },
                     'wd':{
-                        'values': [1e-4, 5e-5, 1e-5, 5e-6, 1e-6],
+                        'values': [1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 1e-7],
                     },
                     'depth':{
-                        'values': [11],
+                        'distribution': 'int_uniform',
+                        'min': 2,
+                        'max': 11,
                     }
                 }
             }
@@ -261,12 +264,19 @@ if __name__=='__main__':
             if os.path.exists(args.model_save_path):
                 shutil.rmtree(args.model_save_path)
             os.mkdir(args.model_save_path)
-            sweep_id = wandb.sweep(sweep=sweep_configuration, project='hcformer_pbulk')
+            sweep_id = wandb.sweep(sweep=sweep_configuration, project='hcformer_bulk')
             wandb.agent(sweep_id, function=train)
         elif args.parallelize:
-            args.model_save_path = os.path.join(args.model_save_path, 'hcformer_pbulk'+str(args.num))
+            args.model_save_path = os.path.join(args.model_save_path, 'hcformer_bulk'+str(args.num))
             if not os.path.exists(args.model_save_path):
                 os.mkdir(args.model_save_path)
             wandb.agent(sweep_id=args.sweep_id, function=train)
     else:
         train()
+
+
+
+
+
+
+

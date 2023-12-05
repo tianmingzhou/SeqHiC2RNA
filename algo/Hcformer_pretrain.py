@@ -69,7 +69,8 @@ class Hcformer(PreTrainedModel):
                         dropout = config.attn_dropout,
                         pos_dropout = config.pos_dropout,
                         num_rel_pos_features = config.dim // config.heads,
-                        hic_2d = config.hic_2d
+                        hic_2d = config.hic_2d,
+                        post_dropout=config.dropout_rate,
                     ),
                 )
                 transformer.append(
@@ -197,7 +198,11 @@ class Hcformer(PreTrainedModel):
             hic_1d = self.hic_1d_transform(hic_1d)
             x = x + hic_1d
 
-        x = self.pre_trans(x, hic_2d=hic_attn)
+        if self.hic_2d:
+            x = self.pre_trans(x, hic_2d=hic_attn)
+        else:
+            x = self.pre_trans(x)
+
         x = self._trunk(x)
 
         out = map_values(lambda fn: fn(x), self._heads)

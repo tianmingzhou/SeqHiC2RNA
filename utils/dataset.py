@@ -8,6 +8,7 @@ from utils.utils import read_DNAseq_tsv, read_Expre_tsv, read_Expre_mtx, read_1D
 
 from scipy.sparse import coo_matrix
 
+# /** Training the Model from Scratch **/
 class bulk_mBC(Dataset):
     def __init__(self, seq, exp):
         self.seq = seq
@@ -22,21 +23,6 @@ class bulk_mBC(Dataset):
     def __len__(self):
         return self.seq.shape[0]
 
-class bulk_mBC_pretrain(Dataset):
-    def __init__(self, seq, exp):
-        self.seq = seq
-        self.exp = exp
-
-    def __getitem__(self, index):
-        seq = self.seq[index]
-        exp = torch.tensor(self.exp[index])
-
-        return seq, exp.float()
-    
-    def __len__(self):
-        return self.seq.shape[0]
-
-
 class bulk_mBC_hic1d(Dataset):
     def __init__(self, seq, exp, hic_1d):
         self.seq = seq
@@ -49,6 +35,33 @@ class bulk_mBC_hic1d(Dataset):
         hic_1d = torch.tensor(self.hic_1d[index])
 
         return seq.long(), exp.float(), hic_1d.float()
+    
+    def __len__(self):
+        return self.seq.shape[0]
+
+# /** For Using Enformer's CNN **/   
+class bulk_mBC_pretrain(Dataset):
+    def __init__(self, seq, exp, hic_1d, hic_2d):
+        self.seq = seq
+        self.exp = exp
+        self.hic_1d = hic_1d
+        self.hic_2d = hic_2d
+
+    def __getitem__(self, index):
+        seq = self.seq[index]
+        exp = torch.tensor(self.exp[index])
+        if self.hic_1d != None and self.hic_2d != None:
+            hic_1d = self.hic_1d[index]
+            hic_2d = self.hic_2d[index]
+            return seq.float(), exp.float(), hic_1d.float()/255, hic_2d
+        elif self.hic_1d != None:
+            hic_1d = self.hic_1d[index]
+            return seq.float(), exp.float(), hic_1d.float()/255
+        elif self.hic_2d != None:
+            hic_2d = self.hic_2d[index]
+            return seq.float(), exp.float(), hic_2d
+        else:
+            return seq.float(), exp.float()
     
     def __len__(self):
         return self.seq.shape[0]
@@ -92,6 +105,8 @@ class pbulk_mBC(Dataset):
         elif self.hic_2d != None:
             hic_2d = self.hic_2d[index]
             return seq.float(), exp.float(), hic_2d
+        else:
+            return seq.float(), exp.float()
     def __len__(self):
         return self.exp.shape[0]
 
@@ -114,8 +129,14 @@ def collate_fn_pbulk(has_hic_1d, has_hic_2d):
             seq = torch.stack(seq, dim=0)
             exp = torch.stack(exp, dim=0)
             return seq, exp, hic_2d
+        else:
+            seq, exp = map(list, zip(*batch))
+            seq = torch.stack(seq, dim=0)
+            exp = torch.stack(exp, dim=0)
+            return seq, exp
     return collate_fn
 
+#/** Using Enformer's Pretrain CNN **/
 def load_data_pbulk(path, seed, batch_size, num_workers, target_len, hic_1d, hic_2d):
     total_sequences = torch.load(os.path.join(path ,'sequence_vector.pt'))
     total_expressions = read_pbulk_exp(os.path.join(path, 'expression_cov_1024_200_celltypebulk.pkl'))
@@ -215,7 +236,6 @@ def load_data_pbulk(path, seed, batch_size, num_workers, target_len, hic_1d, hic
     return train_loader, valid_loader, test_loader
         
 
-
 def load_data_sc(path, seed, batch_size, num_workers, target_len, split=3):
     total_sequences = torch.load(os.path.join(path ,'sequence_vector.pt'))
     total_expressions = read_Expre_mtx(os.path.join(path, 'expression_cov_1024_200.mtx')).X.toarray()
@@ -305,20 +325,43 @@ def load_data_sc(path, seed, batch_size, num_workers, target_len, split=3):
 
     return train_loader, valid_loader, test_loader
 
-
-def load_data_bulk_pretrain(path,pretrain_vec_path, seed, batch_size, num_workers, target_len):
-    total_sequences = torch.load(os.path.join(pretrain_vec_path ,'sequence_vector.pt'))
+def load_data_bulk_pretrain(path, seed, batch_size, num_workers, target_len, hic_1d, hic_2d):
+    total_sequences = torch.load(os.path.join(path,'sequence_vector.pt'))
     total_expressions = read_Expre_tsv(os.path.join(path, 'expression_cov_1024_200_bulk.tsv'))
+    if hic_1d:
+        total_ab_score = read_1D_HiC(os.path.join(path, '1d-score-bulk-10kb-ab_1024_200_uint8.pkl')).reshape(-1, 400, 1)
+        total_ins_score_25 = read_1D_HiC(os.path.join(path, '1d-score-bulk-10kb-is-hw25_1024_200_uint8.pkl')).reshape(-1, 400, 1)
+        total_ins_score_50 = read_1D_HiC(os.path.join(path, '1d-score-bulk-10kb-is-hw50_1024_200_uint8.pkl')).reshape(-1, 400, 1)
+        total_ins_score_100 = read_1D_HiC(os.path.join(path, '1d-score-bulk-10kb-is-hw100_1024_200_uint8.pkl')).reshape(-1, 400, 1)
+        total_genebody = read_1D_HiC(os.path.join(path, '1d-score-bulk-10kb-genebody_1024_200_uint8.pkl')).reshape(-1, 400, 1)
 
-    # crop the DNA-sequence from two sides
-    trim = (target_len - total_expressions.shape[1]) // 2
-    total_expressions = total_expressions[:, -trim:trim]
+        total_ab_score = torch.from_numpy(total_ab_score)
+        total_ins_score_25 = torch.from_numpy(total_ins_score_25)
+        total_ins_score_50 = torch.from_numpy(total_ins_score_50)
+        total_ins_score_100 = torch.from_numpy(total_ins_score_100)
+        total_genebody = torch.from_numpy(total_genebody)
+
+        total_1D_HiC = torch.concat((total_ab_score, total_ins_score_25, total_ins_score_50, total_ins_score_100, total_genebody), axis=2)
+    if hic_2d:
+        if os.path.exists(os.path.join(path, 'contact_1024_200_celltypebulk.pkl')):
+            print('Read the contact map pickle')
+            with open(os.path.join(path, 'contact_1024_200_celltypebulk.pkl'), 'rb') as f:
+                total_2D_HiC = pickle.load(f)
+        else:
+            print('Generate the contact map pickle the first time')
+            total_2D_HiC = hic_h5_coo(os.path.join(path, 'contact_1024_200_celltypebulk.h5'))
+            with open(os.path.join(path, 'contact_1024_200_celltypebulk.pkl'), 'wb') as f:
+                pickle.dump(total_2D_HiC, f)
 
     # Normalize the Expression data
     row_min = np.min(total_expressions, axis=1, keepdims=True)
     row_max = np.max(total_expressions, axis=1, keepdims=True)
     total_expressions = (total_expressions - row_min) / (row_max - row_min)
     total_expressions = np.log1p(total_expressions * 1e4)
+
+    # crop the DNA-sequence from two sides
+    trim = (target_len - total_expressions.shape[1]) // 2
+    total_expressions = total_expressions[:, -trim:trim]
 
     # generate random indice
     k = int(total_sequences.shape[0]/20)
@@ -341,20 +384,36 @@ def load_data_bulk_pretrain(path,pretrain_vec_path, seed, batch_size, num_worker
     test_seq = total_sequences[test_indice]
     test_exp = total_expressions[test_indice]
 
-    train_dataset = bulk_mBC_pretrain(train_seq, train_exp)
-    valid_dataset = bulk_mBC_pretrain(valid_seq, valid_exp)
-    test_dataset = bulk_mBC_pretrain(test_seq, test_exp)
+    train_1d_hic = None
+    valid_1d_hic = None
+    test_1d_hic = None 
+    train_2d_hic = None
+    valid_2d_hic = None
+    test_2d_hic = None
+
+    if hic_1d:
+        train_1d_hic = total_1D_HiC[train_indice]
+        valid_1d_hic = total_1D_HiC[valid_indice]
+        test_1d_hic = total_1D_HiC[test_indice]
+    if hic_2d:
+        train_2d_hic = [total_2D_HiC[i] for i in train_indice]
+        valid_2d_hic = [total_2D_HiC[i] for i in valid_indice]
+        test_2d_hic = [total_2D_HiC[i] for i in test_indice]
+
+    train_dataset = bulk_mBC_pretrain(train_seq, train_exp, train_1d_hic, train_2d_hic)
+    valid_dataset = bulk_mBC_pretrain(valid_seq, valid_exp, valid_1d_hic, valid_2d_hic)
+    test_dataset = bulk_mBC_pretrain(test_seq, test_exp, test_1d_hic, test_2d_hic)
 
     train_loader = DataLoader(
-        dataset = train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+        dataset = train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, collate_fn=collate_fn_pbulk(hic_1d, hic_2d))
     valid_loader = DataLoader(
-        dataset = valid_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+        dataset = valid_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_fn_pbulk(hic_1d, hic_2d))
     test_loader = DataLoader(
-        dataset = test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+        dataset = test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_fn_pbulk(hic_1d, hic_2d))
 
     return train_loader, valid_loader, test_loader
 
-
+# /** Train the Whole Model From Scratch **/
 def load_data_bulk_enf(path, seed, batch_size, num_workers, target_len):
     total_sequences = read_DNAseq_tsv(os.path.join(path, 'sequence_1024_200.tsv'))
     total_expressions = read_Expre_tsv(os.path.join(path, 'expression_cov_1024_200_bulk.tsv'))
