@@ -45,7 +45,7 @@ def evaluation(model, data_loader, device):
                     hic_1d = None
                     hic_2d = sparse_to_torch(hic_2d).to(args.device)
                 else:
-                    seq, exp = item[0].to(args.device), item[1].to(args.device)
+                    seq, exp = item[0].to(args.device), item[1]
                     hic_1d, hic_2d = None, None
                 pred = model(seq, head='human', hic_1d=hic_1d, hic_2d=hic_2d)
 
@@ -248,15 +248,13 @@ if __name__=='__main__':
                 'name': sweep_name,
                 'parameters':{
                     'lr':{
-                        'values': [1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6],
+                        'values': [5e-4, 1e-4, 5e-5, 1e-5],
                     },
                     'wd':{
-                        'values': [1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 1e-7],
+                        'values': [5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 1e-7],
                     },
                     'depth':{
-                        'distribution': 'int_uniform',
-                        'min': 2,
-                        'max': 11,
+                        'values':[11],
                     }
                 }
             }
