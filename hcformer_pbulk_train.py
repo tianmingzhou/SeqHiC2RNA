@@ -94,6 +94,9 @@ def train():
         model = nn.DataParallel(model, device_ids=args.gpu)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
 
+    # model.load_state_dict(torch.load('/home/han_harry_zhang/SeqHiC2RNA/output/hcformer_pbulk/model/hcformer_pbulk6/yiwqf9eo'))
+    # mean_test_pearson_corr_coef = evaluation(model, test_loader, args.device)
+
     # start training
     print('Start training')
     best_pearson_corr_coef = -1

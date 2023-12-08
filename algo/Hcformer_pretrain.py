@@ -30,6 +30,7 @@ class Hcformer(PreTrainedModel):
         self.seq_dim = config.seq_dim
         self.hic_1d = config.hic_1d
         self.hic_2d = config.hic_2d
+        self.depth = config.depth
 
         self.dim_transform = nn.Sequential(
             nn.LayerNorm(1536),
@@ -48,19 +49,21 @@ class Hcformer(PreTrainedModel):
 
         if config.hic_2d:
             self.Gaussianblur = transforms.GaussianBlur(kernel_size=5, sigma=1.5)
-            self.hic_2d_CNN = nn.Sequential(
-                nn.Conv2d(2, 32, kernel_size=3, padding=1),
-                nn.ReLU(),
-                nn.Conv2d(32, 64, kernel_size=7, padding=3),
-                nn.ReLU(),
-                nn.Conv2d(64, config.heads, kernel_size=3, padding=1),
-            )
+            self.hic_2d_CNN = nn.ModuleList()
+            for i in range(config.depth):
+                self.hic_2d_CNN.append(nn.Sequential(
+                    nn.Conv2d(2, 32, kernel_size=3, padding=1),
+                    nn.ReLU(),
+                    nn.Conv2d(32, 64, kernel_size=7, padding=3),
+                    nn.ReLU(),
+                    nn.Conv2d(64, config.heads, kernel_size=3, padding=1),
+                ))
 
         # transformer
-        transformer = []
+        self.attention_block = nn.ModuleList()
+        self.MLP_block = nn.ModuleList()
         for i in range(config.depth):
-            if i == 0:
-                self.pre_trans = Residual(
+            self.attention_block.append(Residual(
                     Hic_Attention(
                         config.dim,
                         heads = config.heads,
@@ -71,43 +74,16 @@ class Hcformer(PreTrainedModel):
                         num_rel_pos_features = config.dim // config.heads,
                         hic_2d = config.hic_2d,
                         post_dropout=config.dropout_rate,
-                    ),
-                )
-                transformer.append(
-                    Residual(nn.Sequential(
-                        nn.LayerNorm(config.dim),
-                        nn.Linear(config.dim, config.dim * 2),
-                        nn.Dropout(config.dropout_rate),
-                        nn.ReLU(),
-                        nn.Linear(config.dim * 2, config.dim),
-                        nn.Dropout(config.dropout_rate)
                     )))
-            else:
-                transformer.append(nn.Sequential(
-                    Residual(nn.Sequential(
-                        nn.LayerNorm(config.dim),
-                        Attention(
-                            config.dim,
-                            heads = config.heads,
-                            dim_key = config.attn_dim_key,
-                            dim_value = config.dim // config.heads,
-                            dropout = config.attn_dropout,
-                            pos_dropout = config.pos_dropout,
-                            num_rel_pos_features = config.dim // config.heads,
-                        ),
-                        nn.Dropout(config.dropout_rate)
-                    )),
-                    Residual(nn.Sequential(
-                        nn.LayerNorm(config.dim),
-                        nn.Linear(config.dim, config.dim * 2),
-                        nn.Dropout(config.dropout_rate),
-                        nn.ReLU(),
-                        nn.Linear(config.dim * 2, config.dim),
-                        nn.Dropout(config.dropout_rate)
-                    ))
-                ))
-
-        self.transformer = nn.Sequential(*transformer)
+            self.MLP_block.append(Residual(
+                nn.Sequential(
+                    nn.LayerNorm(config.dim),
+                    nn.Linear(config.dim, config.dim * 2),
+                    nn.Dropout(config.dropout_rate),
+                    nn.ReLU(),
+                    nn.Linear(config.dim * 2, config.dim),
+                    nn.Dropout(config.dropout_rate)
+                )))
 
         # final pooling
         self.pool = nn.Sequential(
@@ -131,12 +107,6 @@ class Hcformer(PreTrainedModel):
             GELU()
         )
 
-        self._trunk = nn.Sequential(
-            self.transformer,
-            self.crop_final,
-            self.final_pointwise
-        )
-
         # create final heads for human and mouse
 
         self.add_heads(**config.output_heads)
@@ -156,10 +126,6 @@ class Hcformer(PreTrainedModel):
     def set_target_length(self, target_length):
         crop_module = self._trunk[-2]
         crop_module.target_length = target_length
-
-    @property
-    def trunk(self):
-        return self._trunk
 
     @property
     def heads(self):
@@ -193,17 +159,21 @@ class Hcformer(PreTrainedModel):
             x_oprod = rearrange(torch.matmul(x, x.transpose(1, 2)).unsqueeze(-1), 'b h w c -> b c h w') / 256
             hic_2d = self.Gaussianblur(rearrange(hic_2d.unsqueeze(-1), 'b h w c -> b c h w'))
             hic_2d = torch.concat((hic_2d, x_oprod), dim=1)
-            hic_attn = self.hic_2d_CNN(hic_2d)
         if self.hic_1d:
             hic_1d = self.hic_1d_transform(hic_1d)
             x = x + hic_1d
 
-        if self.hic_2d:
-            x = self.pre_trans(x, hic_2d=hic_attn)
-        else:
-            x = self.pre_trans(x)
+        for i in range(self.depth):
+            if self.hic_2d:
+                hic_attn = self.hic_2d_CNN[i](hic_2d)
+                x = self.attention_block[i](x, hic_2d=hic_attn)
+                x = self.MLP_block[i](x)
+            else:
+                x = self.attention_block[i](x)
+                x = self.MLP_block[i](x)
 
-        x = self._trunk(x)
+        x = self.crop_final(x)
+        x = self.final_pointwise(x)
 
         out = map_values(lambda fn: fn(x), self._heads)
 
