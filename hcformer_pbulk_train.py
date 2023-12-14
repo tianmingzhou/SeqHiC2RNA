@@ -44,7 +44,7 @@ def evaluation(model, data_loader, device):
                     hic_1d = None
                     hic_2d = sparse_to_torch(hic_2d).to(args.device)
                 else:
-                    seq, exp = item[0].to(args.device), item[1].to(args.device)
+                    seq, exp = item[0].to(args.device), item[1]
                     hic_1d, hic_2d = None, None
                 pred = model(seq, head='human', hic_1d=hic_1d, hic_2d=hic_2d)
 

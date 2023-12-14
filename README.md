@@ -8,3 +8,6 @@
 * I repeat the target gene expression 8 times to convert the 1024-resolution result to 128-resolution result
 * Maybe we need to change the dimension of the enformer when using our data, currently I still use the same dimension(1536) with the enformer paper.
 * I haven't tune the dropout rate, maybe we can try it later. 
+
+### notes
+* Many different file in algo/ is just for testing the previous saved model, the newest algorithm is in Hcformer_pretrain.py
