@@ -137,7 +137,7 @@ def collate_fn_pbulk(has_hic_1d, has_hic_2d):
     return collate_fn
 
 #/** Using Enformer's Pretrain CNN **/
-def load_data_pbulk(path, seed, batch_size, num_workers, target_len, hic_1d, hic_2d):
+def load_data_pbulk(path, seed, batch_size, num_workers, target_len, hic_1d, hic_2d, gt_mode='raw'):
     total_sequences = torch.load(os.path.join(path ,'sequence_vector.pt'))
     total_expressions = read_pbulk_exp(os.path.join(path, 'expression_cov_1024_200_celltypebulk.pkl'))
     if hic_1d:
@@ -165,12 +165,16 @@ def load_data_pbulk(path, seed, batch_size, num_workers, target_len, hic_1d, hic
             with open(os.path.join(path, 'contact_1024_200_celltypebulk.pkl'), 'wb') as f:
                 pickle.dump(total_2D_HiC, f)
 
-    # Normalize the Expression data
-    row_min = np.min(total_expressions, axis=1, keepdims=True)
-    row_max = np.max(total_expressions, axis=1, keepdims=True)
-    total_expressions = (total_expressions - row_min) / (row_max - row_min)
-    total_expressions = np.log1p(total_expressions * 1e4)
-    total_expressions = total_expressions.reshape(-1, 400)
+    if gt_mode == 'raw': 
+        # Normalize the Expression data
+        row_min = np.min(total_expressions, axis=1, keepdims=True)
+        row_max = np.max(total_expressions, axis=1, keepdims=True)
+        total_expressions = (total_expressions - row_min) / (row_max - row_min)
+        total_expressions = np.log1p(total_expressions * 1e4)
+        total_expressions = total_expressions.reshape(-1, 400)
+    elif gt_mode == 'binary':
+        total_expressions = (total_expressions != 0).astype(int)
+        total_expressions = total_expressions.reshape(-1, 400)
 
     # crop the DNA-sequence from two sides
     trim = (target_len - total_expressions.shape[1]) // 2

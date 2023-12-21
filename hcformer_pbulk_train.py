@@ -15,6 +15,7 @@ from tqdm import tqdm
 from torch import nn
 from typing import List
 from scipy.sparse import coo_matrix
+from sklearn.metrics import roc_auc_score
 
 def sparse_to_torch(coo_matrix: List[coo_matrix]):
     dense_matrix = []
@@ -53,8 +54,10 @@ def evaluation(model, data_loader, device):
                 t.update()
             total_pred = torch.concat(total_pred, dim=0)
             total_exp  = torch.concat(total_exp,  dim=0)
-
-    return pearson_corr_coef(total_pred, total_exp)[0]
+    if args.gt_mode == 'raw':
+        return pearson_corr_coef(total_pred, total_exp)[0]
+    elif args.gt_mode == 'binary':
+        return roc_auc_score(y_score=total_pred.reshape(-1,), y_true=total_exp.reshape(-1,))
 
 def train():
     if args.use_wandb:
@@ -74,7 +77,8 @@ def train():
         num_workers = args.num_workers, 
         target_len = args.target_length,
         hic_1d=args.hic_1d,
-        hic_2d=args.hic_2d)
+        hic_2d=args.hic_2d,
+        gt_mode=args.gt_mode)
 
     model = Hcformer.from_hparams(
         dim = args.dim,
@@ -99,9 +103,15 @@ def train():
 
     # start training
     print('Start training')
-    best_pearson_corr_coef = -1
+    if args.gt_mode == 'raw':
+        metric_name = 'Pearson_corr_coef'
+        best_score = -1
+    elif args.gt_mode == 'binary':
+        metric_name = 'AUC'
+        best_score = 0
     best_epoch = 0
     kill_cnt = 0
+
     for epoch in range(args.epochs):
         train_loss = []
         train_pred = []
@@ -126,7 +136,10 @@ def train():
                 pred = model(seq, head='human', hic_1d=hic_1d, hic_2d=hic_2d)
 
                 # compute loss and metric
-                tr_loss = poisson_loss(pred, exp.unsqueeze(-1))
+                if args.gt_mode == 'raw':
+                    tr_loss = poisson_loss(pred, exp.unsqueeze(-1))
+                elif args.gt_mode == 'binary':
+                    tr_loss = F.binary_cross_entropy(torch.sigmoid(pred), exp.unsqueeze(-1))
                 train_loss.append(tr_loss.item())
 
                 train_pred.append(pred.detach().cpu())
@@ -144,22 +157,26 @@ def train():
         train_loss = np.mean(train_loss)
         train_pred = torch.concat(train_pred, dim=0)
         train_exp = torch.concat(train_exp, dim=0)
-        train_pearson_corr_coef = pearson_corr_coef(train_pred, train_exp)[0]
+
+        if args.gt_mode == 'raw':
+            train_score = pearson_corr_coef(train_pred, train_exp)[0]
+        elif args.gt_mode == 'binary':
+            train_score = roc_auc_score(y_score=train_pred.reshape(-1,), y_true=train_exp.reshape(-1,))
 
         # validate
-        mean_valid_pearson_corr_coef = evaluation(model, valid_loader, args.device)
+        valid_score = evaluation(model, valid_loader, args.device)
 
-        print("In epoch {}, Train Loss: {:.5}, Train Pearson_Corr_Coef: {:.5}, Valid Pearson_Corr_Coef: {:.5}\n".format(epoch+1, train_loss, train_pearson_corr_coef, mean_valid_pearson_corr_coef))
+        print(f"In epoch {epoch+1}, Train Loss: {train_loss:.5}, Train {metric_name}: {train_score:.5}, Valid {metric_name}: {valid_score:.5}\n")
         if args.use_wandb:
             wandb.log({
                 'epoch': epoch+1,
                 'Train Loss': train_loss,
-                'Train Pearson_Corr_Coef': train_pearson_corr_coef,
-                'Valid Pearson_Corr_Coef': mean_valid_pearson_corr_coef,
+                f'Train {metric_name}': train_score,
+                f'Valid {metric_name}': valid_score,
             })
 
-        if mean_valid_pearson_corr_coef > best_pearson_corr_coef:
-            best_pearson_corr_coef = mean_valid_pearson_corr_coef
+        if valid_score > best_score:
+            best_score = valid_score
             best_epoch = epoch + 1
             kill_cnt = 0
             if args.use_wandb:
@@ -179,13 +196,13 @@ def train():
         model.load_state_dict(torch.load(os.path.join(args.model_save_path, run.id)))
     else:
         model.load_state_dict(torch.load(os.path.join(args.model_save_path, 'best_model'+str(args.gpu))))
-    mean_test_pearson_corr_coef = evaluation(model, test_loader, args.device)
-    print("Best epoch: {}, Best Valid Pearson_Corr_Coef: {:.5}, Test Pearson_Corr_Coef: {:.5}\n".format(best_epoch, best_pearson_corr_coef, mean_test_pearson_corr_coef)) # We Already plus 1 for best epoch in previous code
+    test_score = evaluation(model, test_loader, args.device)
+    print(f"Best epoch: {best_epoch}, Best Valid {metric_name}: {best_score:.5}, Test {metric_name}: {test_score:.5}\n")
     if args.use_wandb:
         wandb.log({
             'Best Epoch': best_epoch,
-            'Best Valid Pearson_Corr_Coef': best_pearson_corr_coef,
-            'Test Pearson_Corr_Coef': mean_test_pearson_corr_coef,
+            f'Best Valid {metric_name}': best_score,
+            f'Test {metric_name}': test_score,
         })
 
 if __name__=='__main__':
@@ -204,6 +221,7 @@ if __name__=='__main__':
     parser.add_argument('--gpu', nargs='*', type=int, default='0', help='Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0')
     parser.add_argument('--num', type=int, default=0, help='To distinguish different sweep')
     parser.add_argument('--early_stop', default=10, type=int, help='Patience for early stop.')
+    parser.add_argument('--gt_mode', default='raw', choices=['raw', 'binary'], help='The mode of dealing with the ground truth')
 
     # Hcformer hyperparameters
     parser.add_argument('--dim', default=1536, type=int)
@@ -243,14 +261,14 @@ if __name__=='__main__':
 
     if args.use_wandb:
         if args.use_sweep:
-            sweep_name = 'hcformer_pbulk'+str(args.num)
+            sweep_name = 'hcformer_pbulk_binary'+str(args.num)
             sweep_configuration = {
                 'project': 'hcformer_pbulk',
                 'method': 'random',
                 'name': sweep_name,
                 'parameters':{
                     'lr':{
-                        'values': [5e-4, 1e-4, 5e-5],
+                        'values': [1e-4, 5e-5, 1e-5],
                     },
                     'wd':{
                         'values': [1e-4, 5e-5, 1e-5, 5e-6, 1e-6],
