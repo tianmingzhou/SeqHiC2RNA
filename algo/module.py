@@ -318,7 +318,7 @@ class Hic_Attention(nn.Module):
         logits = content_logits + rel_logits
 
         if self.hic_2d:
-            logits += hic_2d
+            logits += 100 * hic_2d
 
         attn = logits.softmax(dim = -1)
         attn = self.attn_dropout(attn)

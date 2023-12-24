@@ -156,16 +156,17 @@ class Hcformer(PreTrainedModel):
         x = self.pool(x)
 
         if self.hic_2d:
-            x_oprod = rearrange(torch.matmul(x, x.transpose(1, 2)).unsqueeze(-1), 'b h w c -> b c h w') / 256
             hic_2d = self.Gaussianblur(rearrange(hic_2d.unsqueeze(-1), 'b h w c -> b c h w'))
-            hic_2d = torch.concat((hic_2d, x_oprod), dim=1)
         if self.hic_1d:
             hic_1d = self.hic_1d_transform(hic_1d)
             x = x + hic_1d
 
         for i in range(self.depth):
             if self.hic_2d:
-                hic_attn = self.hic_2d_CNN[i](hic_2d)
+                x_oprod = rearrange(torch.matmul(x, x.transpose(1, 2)).unsqueeze(-1), 'b h w c -> b c h w')
+                x_oprod = x_oprod / torch.norm(x_oprod, p=2, dim=-1, keepdim=True)
+                mix = torch.concat((hic_2d, x_oprod), dim=1)
+                hic_attn = self.hic_2d_CNN[i](mix)
                 x = self.attention_block[i](x, hic_2d=hic_attn)
                 x = self.MLP_block[i](x)
             else:

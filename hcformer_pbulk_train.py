@@ -98,7 +98,9 @@ def train():
         model = nn.DataParallel(model, device_ids=args.gpu)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
 
-    # model.load_state_dict(torch.load('/home/han_harry_zhang/SeqHiC2RNA/output/hcformer_pbulk/model/hcformer_pbulk6/yiwqf9eo'))
+    # model.load_state_dict(torch.load('/home/han_harry_zhang/SeqHiC2RNA/output/hcformer_pbulk/model/hcformer_pbulk2/ai9o5a06'))
+    # if len(args.gpu) > 1:
+    #     model = nn.DataParallel(model, device_ids=args.gpu)
     # mean_test_pearson_corr_coef = evaluation(model, test_loader, args.device)
 
     # start training
@@ -261,9 +263,9 @@ if __name__=='__main__':
 
     if args.use_wandb:
         if args.use_sweep:
-            sweep_name = 'hcformer_pbulk_binary'+str(args.num)
+            sweep_name = 'hcformer_pbulk'+str(args.num)
             sweep_configuration = {
-                'project': 'hcformer_pbulk',
+                'project': 'hcformer_pbulk_new',
                 'method': 'random',
                 'name': sweep_name,
                 'parameters':{
@@ -282,7 +284,7 @@ if __name__=='__main__':
             if os.path.exists(args.model_save_path):
                 shutil.rmtree(args.model_save_path)
             os.mkdir(args.model_save_path)
-            sweep_id = wandb.sweep(sweep=sweep_configuration, project='hcformer_pbulk')
+            sweep_id = wandb.sweep(sweep=sweep_configuration, project='hcformer_pbulk_new')
             wandb.agent(sweep_id, function=train)
         elif args.parallelize:
             args.model_save_path = os.path.join(args.model_save_path, 'hcformer_pbulk'+str(args.num))
