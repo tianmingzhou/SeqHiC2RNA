@@ -263,7 +263,7 @@ if __name__=='__main__':
 
     if args.use_wandb:
         if args.use_sweep:
-            sweep_name = 'hcformer_pbulk'+str(args.num)
+            sweep_name = 'hcformer_pbulk_new'+str(args.num)
             sweep_configuration = {
                 'project': 'hcformer_pbulk_new',
                 'method': 'random',
@@ -287,7 +287,7 @@ if __name__=='__main__':
             sweep_id = wandb.sweep(sweep=sweep_configuration, project='hcformer_pbulk_new')
             wandb.agent(sweep_id, function=train)
         elif args.parallelize:
-            args.model_save_path = os.path.join(args.model_save_path, 'hcformer_pbulk'+str(args.num))
+            args.model_save_path = os.path.join(args.model_save_path, 'hcformer_pbulk_new'+str(args.num))
             if not os.path.exists(args.model_save_path):
                 os.mkdir(args.model_save_path)
             wandb.agent(sweep_id=args.sweep_id, function=train)
