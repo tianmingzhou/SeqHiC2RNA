@@ -11,9 +11,11 @@ from einops.layers.torch import Rearrange
 from transformers import PreTrainedModel
 
 from algo.module import Residual, AttentionPool, Attention, Hic_Attention, TargetLengthCrop, GELU
-from algo.module import ConvBlock, map_values, exists
+from algo.module import ConvBlock, map_values, exists, exponential_linspace_int
 
 from algo.config import HcformerConfig
+
+from utils.data import seq_indices_to_one_hot
 
 class Hcformer(PreTrainedModel):
     config_class = HcformerConfig
@@ -183,3 +185,49 @@ class Hcformer(PreTrainedModel):
             out = out[head]
 
         return out
+
+class CNN_Extractor(nn.Module):
+    def __init__(self):
+        super(CNN_Extractor, self).__init__()
+        dim = 1536
+        dim_divisible_by = 1536 / 12
+        self.dim = dim
+        half_dim = dim // 2
+        num_downsample = 7
+
+        # create stem
+
+        self.stem = nn.Sequential(
+            nn.Conv1d(4, half_dim, 15, padding = 7),
+            Residual(ConvBlock(half_dim)),
+            AttentionPool(half_dim, pool_size = 2)
+        )       
+
+        # create conv tower
+
+        filter_list = exponential_linspace_int(half_dim, dim, num = (num_downsample - 1), divisible_by = dim_divisible_by)
+        filter_list = [half_dim, *filter_list]  
+
+        conv_layers = []
+        for dim_in, dim_out in zip(filter_list[:-1], filter_list[1:]):
+            conv_layers.append(nn.Sequential(
+                ConvBlock(dim_in, dim_out, kernel_size = 5),
+                Residual(ConvBlock(dim_out, dim_out, 1)),
+                AttentionPool(dim_out, pool_size = 2)
+            ))
+
+        self.conv_tower = nn.Sequential(*conv_layers)     
+
+    def forward(
+        self,
+        x,
+    ):
+        if x.dtype == torch.long:
+            x = seq_indices_to_one_hot(x)
+        
+        x = rearrange(x, 'b n d -> b d n')
+        x = self.stem(x)
+        x = self.conv_tower(x)
+        x = rearrange(x, 'b d n -> b n d')
+
+        return x
