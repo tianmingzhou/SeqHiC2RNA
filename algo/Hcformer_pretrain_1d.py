@@ -29,6 +29,7 @@ class Hcformer(PreTrainedModel):
         self.dim = config.dim
         twice_dim = config.dim * 2
         self.seq_dim = config.seq_dim
+        self.hic_1d = config.hic_1d
 
         self.dim_transform = nn.Sequential(
             nn.LayerNorm(1536),
@@ -150,9 +151,12 @@ class Hcformer(PreTrainedModel):
         
         if exists(self.dim_transform):
             x = self.dim_transform(x)
-        hic_1d = self.hic_1d_transform(hic_1d)
         x = self.pool(x)
-        x = x + hic_1d
+
+        if self.hic_1d:
+            hic_1d = self.hic_1d_transform(hic_1d)
+            x = x + hic_1d
+
         x = self._trunk(x)
 
         out = map_values(lambda fn: fn(x), self._heads)
