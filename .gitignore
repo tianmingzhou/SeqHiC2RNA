@@ -5,3 +5,4 @@
 /algo/pretrain
 **/__pycache__/
 *.txt
+*.tsv
