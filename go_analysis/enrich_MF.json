@@ -1,0 +1,7 @@
+{
+  "organism": "9606",
+  "refOrganism": "9606",
+  "annotDataSet": "GO:0003674",
+  "enrichmentTestType": "FISHER",
+  "correction": "FDR"
+}

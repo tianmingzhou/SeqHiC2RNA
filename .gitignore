@@ -4,3 +4,4 @@
 /try
 /algo/pretrain
 **/__pycache__/
+*.txt
